@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADO Manager Dashboard — {{ project }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e;font-size:14px}
+.header{background:linear-gradient(135deg,#1a237e 0%,#0d47a1 100%);color:#fff;padding:18px 32px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.header h1{font-size:22px;font-weight:700;letter-spacing:.3px}
+.header .meta{font-size:12px;opacity:.8;margin-top:4px}
+.header .badge{background:rgba(255,255,255,.15);border-radius:20px;padding:4px 12px;font-size:12px}
+.container{max-width:1400px;margin:0 auto;padding:24px 32px}
+.team-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px}
+.team-tab{padding:8px 18px;border:2px solid #1a237e;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;background:#fff;color:#1a237e;transition:all .2s}
+.team-tab.active{background:#1a237e;color:#fff}
+.team-tab:hover:not(.active){background:#e8eaf6}
+.team-panel{display:none}
+.team-panel.active{display:block}
+
+/* Assignee filter */
+.af-bar{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.af-label{font-weight:700;color:#1a237e;font-size:13px;white-space:nowrap;padding-top:3px}
+.af-pills{display:flex;flex-wrap:wrap;gap:7px;flex:1}
+.af-pill{padding:4px 13px;border-radius:20px;border:1.5px solid #c5cae9;background:#f5f7ff;color:#1a237e;cursor:pointer;font-size:12px;font-weight:600;transition:all .18s;white-space:nowrap}
+.af-pill:hover{border-color:#1a237e;background:#e8eaf6}
+.af-pill.active{background:#1a237e;color:#fff;border-color:#1a237e}
+
+/* Sprint bar */
+.sprint-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.sprint-bar label{font-weight:600;color:#1a237e}
+.sprint-select{padding:7px 12px;border:1px solid #c5cae9;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;min-width:220px}
+
+/* Summary cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center}
+.card .value{font-size:32px;font-weight:700;color:#1a237e}
+.card .label{font-size:12px;color:#666;margin-top:4px;font-weight:500}
+.card.warn .value{color:#e65100}
+
+/* Person summary panel */
+.person-summary{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px;overflow:hidden}
+.person-summary-header{background:#283593;color:#fff;padding:13px 20px;display:flex;align-items:center;justify-content:space-between}
+.person-summary-header h3{font-size:14px;font-weight:700}
+.person-summary-header .close-btn{cursor:pointer;font-size:18px;opacity:.7;line-height:1}
+.person-summary-header .close-btn:hover{opacity:1}
+.person-summary-body{padding:20px;display:flex;gap:24px;flex-wrap:wrap}
+.person-sprint-table-wrap{flex:1;min-width:300px;overflow:auto}
+.person-sprint-table{width:100%;border-collapse:collapse;font-size:13px}
+.person-sprint-table th{background:#e8eaf6;color:#1a237e;padding:8px 12px;text-align:left;font-weight:700;white-space:nowrap}
+.person-sprint-table td{padding:8px 12px;border-bottom:1px solid #e8eaf6}
+.person-sprint-table tr:last-child td{border-bottom:none}
+.person-sprint-table .num{text-align:right}
+.person-sprint-table .pct-cell{text-align:right}
+.pct-bar-wrap{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.pct-bar-bg{height:8px;width:80px;background:#e8eaf6;border-radius:4px;overflow:hidden}
+.pct-bar-fill{height:8px;border-radius:4px;background:#1a237e;transition:width .3s}
+.person-chart-wrap{flex:1;min-width:260px}
+canvas.person-canvas{max-height:200px}
+
+/* Chart wrapper */
+.chart-wrapper{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:24px}
+.chart-wrapper h3{font-size:14px;font-weight:600;color:#1a237e;margin-bottom:12px}
+canvas{max-height:400px}
+.chart-wrapper canvas{max-height:400px;width:100%}
+
+/* Story table */
+.table-wrapper{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:auto;margin-bottom:32px}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0}
+.table-header .filter-note{font-size:12px;color:#555;font-style:italic}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:#1a237e;color:#fff;padding:10px 12px;text-align:left;position:sticky;top:0;white-space:nowrap;font-weight:600}
+tbody tr:nth-child(even){background:#f5f7ff}
+tbody tr:hover{background:#e8eaf6}
+tbody tr.hidden-row{display:none}
+td{padding:9px 12px;vertical-align:middle;border-bottom:1px solid #e8eaf6}
+td.id-col{font-weight:700;color:#0d47a1;white-space:nowrap}
+td.id-col a{color:#0d47a1;text-decoration:none}
+td.id-col a:hover{text-decoration:underline}
+td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state-badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:700}
+.state-Active,.state-In\ Progress{background:#e3f2fd;color:#0277bd}
+.state-Resolved,.state-Done,.state-Closed{background:#e8f5e9;color:#2e7d32}
+.state-New,.state-To\ Do{background:#fff8e1;color:#f57f17}
+.state-Removed{background:#fce4ec;color:#c62828}
+.audit{text-align:center;font-size:16px}
+.pass{color:#2e7d32}
+.fail{color:#c62828}
+.points-col{text-align:right;font-weight:600}
+.assigned-col{white-space:nowrap;overflow:hidden;max-width:140px;text-overflow:ellipsis}
+.sprint-summary-panel{display:none}
+.sprint-summary-panel.active{display:block}
+.no-data{text-align:center;padding:40px;color:#888;font-size:15px}
+.no-visible-rows{display:none;text-align:center;padding:20px;color:#888;font-size:13px}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="h1-row" style="display:flex;align-items:center;gap:12px">
+      <h1>ADO Manager Dashboard</h1>
+      <span class="badge">{{ project }}</span>
+    </div>
+    <div class="meta">Generated {{ generated_at }}</div>
+  </div>
+  <div style="text-align:right;font-size:12px;opacity:.8">
+    {{ teams | length }} team(s) &nbsp;|&nbsp; {{ sprint_count }} sprint(s) per team
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Team tabs -->
+  <div class="team-tabs">
+    {% for team in teams %}
+    <div class="team-tab{% if loop.first %} active{% endif %}" onclick="switchTeam('{{ team.id }}')">{{ team.name }}</div>
+    {% endfor %}
+  </div>
+
+  {% for team in teams %}
+  <div class="team-panel{% if loop.first %} active{% endif %}" id="team-{{ team.id }}">
+
+    <!-- Assigned To filter -->
+    <div class="af-bar">
+      <span class="af-label">Assigned To:</span>
+      <div class="af-pills" id="af-{{ team.id }}">
+        <!-- populated by JS on load -->
+      </div>
+    </div>
+
+    <!-- Person cross-sprint summary (shown when a person pill is active) -->
+    <div class="person-summary" id="ps-{{ team.id }}" style="display:none">
+      <div class="person-summary-header">
+        <h3 id="ps-title-{{ team.id }}"></h3>
+        <span class="close-btn" onclick="clearAssigneeFilter('{{ team.id }}')">&#10005;</span>
+      </div>
+      <div class="person-summary-body">
+        <div class="person-sprint-table-wrap">
+          <table class="person-sprint-table">
+            <thead>
+              <tr>
+                <th>Sprint</th>
+                <th class="num">Assigned</th>
+                <th class="num">Completed</th>
+                <th class="num">Points Done</th>
+                <th class="pct-cell">Completion</th>
+              </tr>
+            </thead>
+            <tbody id="ps-tbody-{{ team.id }}"></tbody>
+          </table>
+        </div>
+        <div class="person-chart-wrap">
+          <canvas class="person-canvas" id="ps-chart-{{ team.id }}"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sprint selector -->
+    <div class="sprint-bar">
+      <label>Sprint:</label>
+      <select class="sprint-select" onchange="switchSprint('{{ team.id }}', this.value)">
+        {% for sprint in team.sprints %}
+        <option value="{{ sprint.id }}">{{ sprint.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% for sprint in team.sprints %}
+    {% set sdata = sprint.data %}
+    <div class="sprint-summary-panel{% if loop.first %} active{% endif %}" id="sprint-{{ team.id }}-{{ sprint.id }}">
+
+      <!-- Summary cards (static; updated by JS when filtered) -->
+      <div class="cards" id="cards-{{ team.id }}-{{ sprint.id }}">
+        <div class="card">
+          <div class="value" id="c-total-{{ team.id }}-{{ sprint.id }}">{{ sdata.total }}</div>
+          <div class="label">Work Items</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-done-{{ team.id }}-{{ sprint.id }}">{{ sdata.completed }}</div>
+          <div class="label">Completed</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-pts-{{ team.id }}-{{ sprint.id }}">{{ sdata.total_points }}</div>
+          <div class="label">Story Points</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-donepts-{{ team.id }}-{{ sprint.id }}">{{ sdata.completed_points }}</div>
+          <div class="label">Points Done</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-rate-{{ team.id }}-{{ sprint.id }}">{{ sdata.audit_pass_rate }}%</div>
+          <div class="label">Audit Pass Rate</div>
+        </div>
+      </div>
+
+      <!-- Filter note -->
+      <div class="filter-note" id="fn-{{ team.id }}-{{ sprint.id }}" style="display:none;margin-bottom:12px;padding:6px 14px;background:#e8eaf6;border-radius:6px;font-size:12px;color:#1a237e"></div>
+
+      <!-- Audit table -->
+      {% if sdata.stories %}
+      <div class="table-wrapper">
+        <table id="tbl-{{ team.id }}-{{ sprint.id }}">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>State</th>
+              <th>Assigned To</th>
+              <th style="text-align:right">Points</th>
+              <th title="Acceptance Criteria filled">AC</th>
+              <th title="At least one GitHub PR linked">PR</th>
+              <th title="At least one commit linked">Commits</th>
+              <th title="GitHub PR has an approved review">Reviewed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in sdata.stories %}
+            <tr data-assignee="{{ s.assigned_to | e }}">
+              <td class="id-col"><a href="{{ s.ado_url }}" target="_blank">#{{ s.id }}</a></td>
+              <td class="title-col" title="{{ s.title }}">
+                {% if s.work_item_type == 'Bug' %}
+                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="Bug"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>
+                {% else %}
+                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="User Story"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>
+                {% endif %}{{ s.title }}</td>
+              <td><span class="state-badge state-{{ s.state | replace(' ', '\\ ') }}">{{ s.state }}</span></td>
+              <td class="assigned-col" title="{{ s.assigned_to }}">{{ s.assigned_to }}</td>
+              <td class="points-col">{{ s.story_points if s.story_points else '—' }}</td>
+              <td class="audit">{% if s.has_ac %}<span class="pass" title="AC present">✔</span>{% else %}<span class="fail" title="Missing AC">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.has_pr %}<span class="pass" title="PR linked">✔</span>{% else %}<span class="fail" title="No PR linked">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.has_commit %}<span class="pass" title="Commit linked">✔</span>{% else %}<span class="fail" title="No commit">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.pr_reviewed %}<span class="pass" title="Approved review">✔</span>{% elif not s.has_pr %}<span style="color:#bbb" title="No PR">—</span>{% else %}<span class="fail" title="No approved review">✘</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="no-visible-rows" id="nvr-{{ team.id }}-{{ sprint.id }}">No stories assigned to this person in this sprint.</div>
+      </div>
+      {% else %}
+      <div class="no-data">No work items found in this sprint.</div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+
+    <!-- Sprint-over-sprint bar chart -->
+    <div class="chart-wrapper">
+      <h3>Sprint Progress — {{ team.name }}</h3>
+      <canvas id="chart-{{ team.id }}"></canvas>
+    </div>
+
+  </div>
+  {% endfor %}
+
+</div>
+
+<script>
+// ── Story data for all teams/sprints (used by assignee filter JS) ──────────
+var teamStoryData = {{ story_data | tojson }};
+// Structure: { teamId: { sprintId: { name, stories: [{assignedTo, state, points, completedPoints}] } } }
+
+var DONE_STATES = {'Resolved':1,'Done':1,'Closed':1};
+
+// ── Assignee filter state ──────────────────────────────────────────────────
+var activeAssignee = {};  // teamId → assignee name or "" (All)
+
+function buildAssigneeFilters() {
+  Object.keys(teamStoryData).forEach(function(teamId) {
+    var seen = {};
+    Object.keys(teamStoryData[teamId]).forEach(function(sprintId) {
+      (teamStoryData[teamId][sprintId].stories || []).forEach(function(s) {
+        if (s.assignedTo) seen[s.assignedTo] = true;
+      });
+    });
+    var names = Object.keys(seen).sort();
+    var container = document.getElementById('af-' + teamId);
+    if (!container) return;
+
+    // All pill
+    var allPill = makePill('All', teamId, true);
+    container.appendChild(allPill);
+
+    names.forEach(function(name) {
+      container.appendChild(makePill(name, teamId, false));
+    });
+  });
+}
+
+function makePill(name, teamId, isAll) {
+  var pill = document.createElement('div');
+  pill.className = 'af-pill' + (isAll ? ' active' : '');
+  pill.textContent = name;
+  pill.setAttribute('data-name', name);
+  pill.setAttribute('data-team', teamId);
+  pill.onclick = function() {
+    if (isAll || (activeAssignee[teamId] === name)) {
+      clearAssigneeFilter(teamId);
+    } else {
+      applyAssigneeFilter(teamId, name);
+    }
+  };
+  return pill;
+}
+
+function applyAssigneeFilter(teamId, assignee) {
+  activeAssignee[teamId] = assignee;
+
+  // Update pills
+  var container = document.getElementById('af-' + teamId);
+  container.querySelectorAll('.af-pill').forEach(function(p) {
+    p.classList.toggle('active', p.getAttribute('data-name') === assignee ||
+                                  (assignee === '' && p.getAttribute('data-name') === 'All'));
+  });
+
+  // Filter rows in every sprint table for this team
+  var teamData = teamStoryData[teamId] || {};
+  Object.keys(teamData).forEach(function(sprintId) {
+    filterSprintTable(teamId, sprintId, assignee);
+  });
+
+  // Show person summary panel
+  showPersonSummary(teamId, assignee);
+}
+
+function clearAssigneeFilter(teamId) {
+  activeAssignee[teamId] = '';
+
+  // Reset pills
+  var container = document.getElementById('af-' + teamId);
+  if (container) {
+    container.querySelectorAll('.af-pill').forEach(function(p) {
+      p.classList.toggle('active', p.getAttribute('data-name') === 'All');
+    });
+  }
+
+  // Show all rows in all sprint tables
+  var teamData = teamStoryData[teamId] || {};
+  Object.keys(teamData).forEach(function(sprintId) {
+    filterSprintTable(teamId, sprintId, '');
+  });
+
+  // Hide person summary
+  var ps = document.getElementById('ps-' + teamId);
+  if (ps) ps.style.display = 'none';
+}
+
+function filterSprintTable(teamId, sprintId, assignee) {
+  var tbl = document.getElementById('tbl-' + teamId + '-' + sprintId);
+  if (!tbl) return;
+
+  var rows = tbl.querySelectorAll('tbody tr');
+  var visible = 0;
+  rows.forEach(function(row) {
+    var ra = row.getAttribute('data-assignee') || '';
+    var show = !assignee || ra === assignee;
+    row.classList.toggle('hidden-row', !show);
+    if (show) visible++;
+  });
+
+  // Update summary cards for current sprint
+  updateCardsForFilter(teamId, sprintId, assignee);
+
+  // Show/hide "no stories" placeholder
+  var nvr = document.getElementById('nvr-' + teamId + '-' + sprintId);
+  if (nvr) nvr.style.display = (visible === 0 && assignee) ? 'block' : 'none';
+
+  // Update filter note
+  var fn = document.getElementById('fn-' + teamId + '-' + sprintId);
+  if (fn) {
+    if (assignee) {
+      fn.style.display = 'block';
+      fn.textContent = 'Filtered: showing ' + visible + ' stor' + (visible===1?'y':'ies') + ' assigned to ' + assignee;
+    } else {
+      fn.style.display = 'none';
+    }
+  }
+}
+
+function updateCardsForFilter(teamId, sprintId, assignee) {
+  var data = (teamStoryData[teamId] || {})[sprintId];
+  if (!data) return;
+
+  var stories = assignee
+    ? data.stories.filter(function(s){ return s.assignedTo === assignee; })
+    : data.stories;
+
+  var total = stories.length;
+  var completed = stories.filter(function(s){ return DONE_STATES[s.state]; }).length;
+  var pts = stories.reduce(function(a,s){ return a + (s.points || 0); }, 0);
+  var donePts = stories.filter(function(s){ return DONE_STATES[s.state]; })
+                       .reduce(function(a,s){ return a + (s.points || 0); }, 0);
+
+  // Audit pass rate (AC + PR + Commits + Points)
+  var checks = total * 4;
+  var passed = stories.reduce(function(a,s){
+    return a + (s.hasAc?1:0) + (s.hasPr?1:0) + (s.hasCommit?1:0) + (s.hasPoints?1:0);
+  }, 0);
+  var rate = checks > 0 ? Math.round(passed / checks * 100) : 100;
+
+  setText('c-total-'   + teamId + '-' + sprintId, total);
+  setText('c-done-'    + teamId + '-' + sprintId, completed);
+  setText('c-pts-'     + teamId + '-' + sprintId, pts.toFixed(1).replace(/\.0$/,''));
+  setText('c-donepts-' + teamId + '-' + sprintId, donePts.toFixed(1).replace(/\.0$/,''));
+  setText('c-rate-'    + teamId + '-' + sprintId, rate + '%');
+}
+
+function setText(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function showPersonSummary(teamId, assignee) {
+  var ps = document.getElementById('ps-' + teamId);
+  if (!ps) return;
+
+  document.getElementById('ps-title-' + teamId).textContent = assignee + ' — Sprint-wise Summary';
+
+  var teamData = teamStoryData[teamId] || {};
+  var sprintIds = Object.keys(teamData).sort(function(a, b) {
+    var na = teamData[a].name || '';
+    var nb = teamData[b].name || '';
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+
+  var rows = '';
+  var chartLabels = [], chartTotal = [], chartDone = [];
+
+  sprintIds.forEach(function(sprintId) {
+    var data = teamData[sprintId];
+    var stories = data.stories.filter(function(s){ return s.assignedTo === assignee; });
+    if (!stories.length && !data.isCurrent) return;
+
+    var total = stories.length;
+    var completed = stories.filter(function(s){ return DONE_STATES[s.state]; }).length;
+    var donePts = stories.filter(function(s){ return DONE_STATES[s.state]; })
+                         .reduce(function(a,s){ return a + (s.points||0); }, 0);
+    var pct = total > 0 ? Math.round(completed / total * 100) : 0;
+
+    var shortName = data.name.length > 18 ? data.name.slice(-18) : data.name;
+    chartLabels.push(shortName);
+    chartTotal.push(total);
+    chartDone.push(completed);
+
+    rows += '<tr>'
+      + '<td>' + escHtml(shortName) + '</td>'
+      + '<td class="num">' + total + '</td>'
+      + '<td class="num">' + completed + '</td>'
+      + '<td class="num">' + (donePts || '—') + '</td>'
+      + '<td class="pct-cell"><div class="pct-bar-wrap">'
+      + '<div class="pct-bar-bg"><div class="pct-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<span style="min-width:34px;font-size:12px;font-weight:700;color:#1a237e">' + pct + '%</span>'
+      + '</div></td>'
+      + '</tr>';
+  });
+
+  document.getElementById('ps-tbody-' + teamId).innerHTML = rows || '<tr><td colspan="5" style="text-align:center;color:#888;padding:12px">No stories found for this person.</td></tr>';
+  ps.style.display = 'block';
+
+  // Draw person mini-chart
+  setTimeout(function() {
+    drawBarChart('ps-chart-' + teamId, chartLabels, chartDone, chartTotal, true);
+  }, 50);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Sprint / team switching ────────────────────────────────────────────────
+function switchTeam(teamId) {
+  document.querySelectorAll('.team-panel').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.team-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.getElementById('team-' + teamId).classList.add('active');
+  document.querySelectorAll('.team-tab').forEach(function(t){
+    if (t.getAttribute('onclick') === "switchTeam('" + teamId + "')") t.classList.add('active');
+  });
+}
+
+function switchSprint(teamId, sprintId) {
+  var panel = document.getElementById('team-' + teamId);
+  if (!panel) return;
+  panel.querySelectorAll('.sprint-summary-panel').forEach(function(p){ p.classList.remove('active'); });
+  var target = document.getElementById('sprint-' + teamId + '-' + sprintId);
+  if (target) target.classList.add('active');
+
+  // Re-apply current assignee filter for the newly shown sprint
+  var assignee = activeAssignee[teamId] || '';
+  if (assignee) filterSprintTable(teamId, sprintId, assignee);
+}
+
+// ── Canvas bar chart ───────────────────────────────────────────────────────
+function drawBarChart(canvasId, labels, completedData, totalData, compact) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = compact ? (canvas.offsetWidth || 500) : 1000;
+  var H = compact ? 180 : 400;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0,0,W,H);
+
+  var n = labels.length;
+  if (!n) return;
+  var padL=48, padR=20, padT=24, padB=compact?48:72;
+  var maxVal = Math.max.apply(null, totalData.concat([1]));
+  var chartW = W - padL - padR;
+  var chartH = H - padT - padB;
+  var groupW = chartW / n;
+  var barW = Math.min(groupW * 0.38, 40);
+
+  // Horizontal grid lines
+  ctx.strokeStyle='#e8eaf6'; ctx.lineWidth=1;
+  for (var i=0; i<=5; i++) {
+    var y = padT + chartH - (chartH * i / 5);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillStyle='#999'; ctx.font='10px sans-serif'; ctx.textAlign='right';
+    ctx.fillText(Math.round(maxVal*i/5), padL-6, y+4);
+  }
+
+  labels.forEach(function(label, i) {
+    var x = padL + i * groupW + groupW/2;
+
+    // Total bar (light)
+    var totalH = totalData[i] > 0 ? Math.max((totalData[i] / maxVal) * chartH, 2) : 0;
+    ctx.fillStyle='#c5cae9';
+    ctx.fillRect(x - barW - 1, padT + chartH - totalH, barW, totalH);
+    if (totalData[i] > 0) {
+      ctx.fillStyle='#5c6bc0'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(totalData[i], x - barW/2 - 1, padT + chartH - totalH - 4);
+    }
+
+    // Completed bar (dark)
+    var compH = completedData[i] > 0 ? Math.max((completedData[i] / maxVal) * chartH, 2) : 0;
+    ctx.fillStyle='#1a237e';
+    ctx.fillRect(x + 1, padT + chartH - compH, barW, compH);
+    if (completedData[i] > 0) {
+      ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(completedData[i], x + barW/2 + 1, padT + chartH - compH + 12);
+    }
+
+    // Angled x-axis label (short sprint name)
+    if (!compact) {
+      var m = label.match(/S\d+/);
+      var lbl = m ? m[0] : (label.length > 8 ? label.slice(-8) : label);
+      ctx.save();
+      ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.textAlign='right';
+      ctx.translate(x + 4, padT + chartH + 10);
+      ctx.rotate(-Math.PI / 4);
+      ctx.fillText(lbl, 0, 0);
+      ctx.restore();
+    } else {
+      var lbl2 = label.length > 10 ? label.slice(-10) : label;
+      ctx.fillStyle='#555'; ctx.font='10px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(lbl2, x, H - padB + 14);
+    }
+  });
+
+  // Legend (top-right corner inside chart area)
+  var lx = W - padR - 160;
+  var ly = padT + 2;
+  ctx.fillStyle='#c5cae9'; ctx.fillRect(lx, ly, 12, 10);
+  ctx.fillStyle='#444'; ctx.font='11px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('Total', lx+16, ly+9);
+  ctx.fillStyle='#1a237e'; ctx.fillRect(lx+62, ly, 12, 10);
+  ctx.fillText('Completed', lx+78, ly+9);
+}
+
+// ── Initialise ─────────────────────────────────────────────────────────────
+var chartData = {{ chart_data | tojson }};
+window.addEventListener('load', function() {
+  buildAssigneeFilters();
+  Object.keys(chartData).forEach(function(teamId) {
+    var d = chartData[teamId];
+    drawBarChart('chart-' + teamId, d.labels, d.completed, d.total, false);
+  });
+});
+</script>
+</body>
+</html>
