@@ -1,6 +1,7 @@
 import base64
 import os
 import re
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -94,14 +95,26 @@ class AzureDevOpsClient:
             ) from exc
 
     def _get(self, url: str, params: dict = None) -> dict:
-        resp = self.session.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-        return self._parse_json(resp)
+        for attempt in range(3):
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
+                resp.raise_for_status()
+                return self._parse_json(resp)
+            except requests.exceptions.ReadTimeout:
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
 
     def _post(self, url: str, payload: dict, params: dict = None) -> dict:
-        resp = self.session.post(url, json=payload, params=params, timeout=30)
-        resp.raise_for_status()
-        return self._parse_json(resp)
+        for attempt in range(3):
+            try:
+                resp = self.session.post(url, json=payload, params=params, timeout=30)
+                resp.raise_for_status()
+                return self._parse_json(resp)
+            except requests.exceptions.ReadTimeout:
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
 
     def get_teams(self) -> list[dict]:
         url = f"{self.base}/_apis/projects/{self.project}/teams"
