@@ -1,0 +1,56 @@
+name: Publish ADO Dashboard
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # daily at 7 AM UTC (8 AM London / 3 AM ET)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate report
+        env:
+          ADO_ORG: ${{ secrets.ADO_ORG }}
+          ADO_PROJECT: ${{ secrets.ADO_PROJECT }}
+          ADO_PAT: ${{ secrets.ADO_PAT }}
+          GITHUB_TOKEN: ${{ secrets.DASHBOARD_GITHUB_TOKEN }}
+          TEAMS_FILTER: ${{ secrets.TEAMS_FILTER }}
+          SPRINT_COUNT: ${{ vars.SPRINT_COUNT || '15' }}
+          START_SPRINT: ${{ vars.START_SPRINT }}
+          INCLUDE_BACKLOG: ${{ vars.INCLUDE_BACKLOG || 'true' }}
+          TRACK_EFFORT: ${{ vars.TRACK_EFFORT || 'true' }}
+          OUTPUT_DIR: ./site
+        run: |
+          mkdir -p site
+          python main.py
+          mv site/ado_report_*.html site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

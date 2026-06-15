@@ -4,6 +4,39 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 
+def _build_feature_js_data(teams: list[dict]) -> dict:
+    """Build compact per-team feature data for the Feature View JS."""
+    out = {}
+    for team in teams:
+        features_js = []
+        for fe in team.get("features", []):
+            features_js.append({
+                "name": fe["name"],
+                "totalItems": fe["total_items"],
+                "completedItems": fe["completed_items"],
+                "totalPoints": fe["total_points"],
+                "donePoints": fe["done_points"],
+                "completionPct": fe["completion_pct"],
+                "roadblocks": fe["roadblocks"],
+                "sprintTrend": fe["sprint_trend"],
+                "stories": [
+                    {
+                        "id": s["id"],
+                        "title": s["title"],
+                        "adoUrl": s["ado_url"],
+                        "witType": s["work_item_type"],
+                        "state": s["state"],
+                        "assignedTo": s["assigned_to"],
+                        "points": s["story_points"] or 0,
+                        "sprintName": s.get("sprint_name", ""),
+                    }
+                    for s in fe["stories"]
+                ],
+            })
+        out[team["id"]] = features_js
+    return out
+
+
 def _build_story_data(teams: list[dict]) -> dict:
     """Build compact per-team/sprint story data for the assignee filter JS."""
     out = {}
@@ -13,8 +46,14 @@ def _build_story_data(teams: list[dict]) -> dict:
             team_stories[sprint["id"]] = {
                 "name": sprint["name"],
                 "isCurrent": not sprint.get("is_backlog", False),
+                "healthScore": sprint["data"]["health_score"],
+                "healthLabel": sprint["data"]["health_label"],
                 "stories": [
                     {
+                        "id": s["id"],
+                        "title": s["title"],
+                        "adoUrl": s["ado_url"],
+                        "witType": s["work_item_type"],
                         "assignedTo": s["assigned_to"],
                         "state": s["state"],
                         "points": s["story_points"] or 0,
@@ -22,6 +61,12 @@ def _build_story_data(teams: list[dict]) -> dict:
                         "hasPr": s["has_pr"],
                         "hasCommit": s["has_commit"],
                         "hasPoints": bool(s["story_points"]),
+                        "tags": s.get("tags", []),
+                        "devDays": s.get("dev_days"),
+                        "devWip":  s.get("dev_wip", False),
+                        "qaDays":  s.get("qa_days"),
+                        "qaWip":   s.get("qa_wip", False),
+                        "roadblockCount": len(s.get("roadblocks", [])),
                     }
                     for s in sprint["data"]["stories"]
                 ],
@@ -52,6 +97,7 @@ def generate_report(data: dict, output_dir: str = ".") -> str:
         teams=data["teams"],
         chart_data=chart_data,
         story_data=_build_story_data(data["teams"]),
+        feature_data=_build_feature_js_data(data["teams"]),
     )
 
     filename = f"ado_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"

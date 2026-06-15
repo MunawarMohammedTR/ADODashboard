@@ -20,12 +20,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .team-panel.active{display:block}
 
 /* Assignee filter */
-.af-bar{background:#fff;border-radius:10px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
-.af-label{font-weight:700;color:#1a237e;font-size:13px;white-space:nowrap;padding-top:3px}
-.af-pills{display:flex;flex-wrap:wrap;gap:7px;flex:1}
-.af-pill{padding:4px 13px;border-radius:20px;border:1.5px solid #c5cae9;background:#f5f7ff;color:#1a237e;cursor:pointer;font-size:12px;font-weight:600;transition:all .18s;white-space:nowrap}
-.af-pill:hover{border-color:#1a237e;background:#e8eaf6}
-.af-pill.active{background:#1a237e;color:#fff;border-color:#1a237e}
+.af-bar{background:#fff;border-radius:10px;padding:10px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.af-label{font-weight:700;color:#1a237e;font-size:13px;white-space:nowrap}
+.assignee-select{padding:5px 12px;border:1.5px solid #c5cae9;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;min-width:200px;color:#1a237e}
+.assignee-select:focus{outline:none;border-color:#1a237e}
+
+/* Tag filter */
+.tag-bar{background:#fff;border-radius:10px;padding:10px 18px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.tag-label{font-weight:700;color:#1a237e;font-size:13px;white-space:nowrap}
+.tag-select{padding:5px 12px;border:1.5px solid #c5cae9;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;min-width:200px;color:#1a237e}
+.tag-select:focus{outline:none;border-color:#1a237e}
 
 /* Sprint bar */
 .sprint-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px}
@@ -93,6 +97,76 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
 .sprint-summary-panel.active{display:block}
 .no-data{text-align:center;padding:40px;color:#888;font-size:15px}
 .no-visible-rows{display:none;text-align:center;padding:20px;color:#888;font-size:13px}
+.effort-col{text-align:right;font-weight:600;white-space:nowrap}
+.wip-star{color:#e65100;font-size:10px;vertical-align:super;font-weight:700}
+.state-In\ Development{background:#e3f2fd;color:#0277bd}
+.state-QA{background:#f3e5f5;color:#6a1b9a}
+/* Health score */
+.health-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:14px;font-size:12px;font-weight:700;letter-spacing:.2px}
+.health-green{background:#e8f5e9;color:#2e7d32;border:1.5px solid #a5d6a7}
+.health-amber{background:#fff8e1;color:#f57f17;border:1.5px solid #ffe082}
+.health-red{background:#fce4ec;color:#c62828;border:1.5px solid #ef9a9a}
+.health-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.health-dot-green{background:#43a047}
+.health-dot-amber{background:#ffa000}
+.health-dot-red{background:#e53935}
+.card.health-green .value{color:#2e7d32}
+.card.health-amber .value{color:#f57f17}
+.card.health-red .value{color:#c62828}
+.sprint-health-bar{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600}
+.sprint-health-bar.green{background:#e8f5e9;border:1.5px solid #a5d6a7;color:#2e7d32}
+.sprint-health-bar.amber{background:#fff8e1;border:1.5px solid #ffe082;color:#b45309}
+.sprint-health-bar.red{background:#fce4ec;border:1.5px solid #ef9a9a;color:#c62828}
+/* Completed-items panel inside person summary */
+.ps-completed-section{border-top:1px solid #e8eaf6;padding:16px 20px 20px}
+.ps-completed-section h4{font-size:13px;font-weight:700;color:#1a237e;margin-bottom:10px}
+.ps-completed-table{width:100%;border-collapse:collapse;font-size:12px}
+.ps-completed-table th{background:#e8eaf6;color:#1a237e;padding:7px 10px;text-align:left;font-weight:700;white-space:nowrap;position:sticky;top:0}
+.ps-completed-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.ps-completed-table tr:last-child td{border-bottom:none}
+.ps-completed-table .num{text-align:right;font-weight:600}
+.ps-completed-wrap{max-height:320px;overflow-y:auto;border:1px solid #e8eaf6;border-radius:6px}
+
+/* View toggle */
+.view-toggle{display:flex;gap:0;margin-bottom:20px;border:2px solid #1a237e;border-radius:8px;overflow:hidden;width:fit-content}
+.view-btn{padding:8px 22px;font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:#1a237e;border:none;transition:all .15s}
+.view-btn.active{background:#1a237e;color:#fff}
+.view-panel{display:none}
+.view-panel.active{display:block}
+
+/* Feature cards */
+.feature-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px}
+.feature-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.09);padding:16px 18px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.feature-card:hover{border-color:#7986cb}
+.feature-card.active{border-color:#1a237e;box-shadow:0 2px 8px rgba(26,35,126,.18)}
+.fc-name{font-size:13px;font-weight:700;color:#1a237e;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-counts{font-size:12px;color:#555;margin-bottom:6px}
+.fc-bar-bg{height:7px;background:#e8eaf6;border-radius:4px;overflow:hidden;margin-bottom:4px}
+.fc-bar-fill{height:7px;border-radius:4px;background:#1a237e;transition:width .3s}
+.fc-pct{font-size:11px;font-weight:700;color:#1a237e}
+.fc-roadblock-badge{display:inline-block;margin-top:6px;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:700;background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
+
+/* Feature detail panel */
+.feature-detail{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.1);margin-bottom:24px;overflow:hidden;display:none}
+.feature-detail.active{display:block}
+.fd-header{background:#283593;color:#fff;padding:13px 20px;display:flex;align-items:center;justify-content:space-between}
+.fd-header h3{font-size:14px;font-weight:700}
+.fd-close{cursor:pointer;font-size:18px;opacity:.7;line-height:1}
+.fd-close:hover{opacity:1}
+.fd-body{padding:20px;display:flex;gap:24px;flex-wrap:wrap}
+.fd-chart-wrap{flex:1;min-width:260px}
+.fd-roadblocks{flex:1;min-width:220px;background:#fff8f0;border:1px solid #ffcc80;border-radius:8px;padding:14px}
+.fd-roadblocks h4{font-size:12px;font-weight:700;color:#e65100;margin-bottom:8px}
+.fd-roadblocks ul{margin:0;padding-left:16px;font-size:12px;color:#555;line-height:1.7}
+.fd-table-wrap{width:100%;overflow:auto}
+.fd-table{width:100%;border-collapse:collapse;font-size:12px}
+.fd-table th{background:#e8eaf6;color:#1a237e;padding:7px 10px;text-align:left;font-weight:700;white-space:nowrap;position:sticky;top:0}
+.fd-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.fd-table tr:last-child td{border-bottom:none}
+.fd-table .num{text-align:right;font-weight:600}
+.fd-section-header{padding:0 20px 6px;font-size:13px;font-weight:700;color:#1a237e;border-top:1px solid #e8eaf6;padding-top:14px}
+
+
 </style>
 </head>
 <body>
@@ -121,12 +195,29 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
   {% for team in teams %}
   <div class="team-panel{% if loop.first %} active{% endif %}" id="team-{{ team.id }}">
 
+    <!-- View toggle: Sprint / Feature -->
+    <div class="view-toggle">
+      <div class="view-btn active" id="vbtn-sprint-{{ team.id }}" onclick="toggleView('{{ team.id }}','sprint')">Sprint View</div>
+      <div class="view-btn" id="vbtn-feature-{{ team.id }}" onclick="toggleView('{{ team.id }}','feature')">Feature View</div>
+    </div>
+
+    <!-- ══════════ SPRINT VIEW ══════════ -->
+    <div class="view-panel active" id="sprint-view-{{ team.id }}">
+
     <!-- Assigned To filter -->
     <div class="af-bar">
       <span class="af-label">Assigned To:</span>
-      <div class="af-pills" id="af-{{ team.id }}">
-        <!-- populated by JS on load -->
-      </div>
+      <select class="assignee-select" id="af-{{ team.id }}" onchange="onAssigneeChange('{{ team.id }}', this.value)">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <!-- Tag filter -->
+    <div class="tag-bar">
+      <span class="tag-label">Tags:</span>
+      <select class="tag-select" id="tag-select-{{ team.id }}" onchange="applyTagFilter('{{ team.id }}', this.value)">
+        <option value="">All Tags</option>
+      </select>
     </div>
 
     <!-- Person cross-sprint summary (shown when a person pill is active) -->
@@ -154,6 +245,11 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
           <canvas class="person-canvas" id="ps-chart-{{ team.id }}"></canvas>
         </div>
       </div>
+      <!-- All completed items for this person across all sprints -->
+      <div class="ps-completed-section">
+        <h4 id="ps-completed-title-{{ team.id }}">All Completed Items</h4>
+        <div class="ps-completed-wrap" id="ps-completed-{{ team.id }}"></div>
+      </div>
     </div>
 
     <!-- Sprint selector -->
@@ -161,7 +257,8 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
       <label>Sprint:</label>
       <select class="sprint-select" onchange="switchSprint('{{ team.id }}', this.value)">
         {% for sprint in team.sprints %}
-        <option value="{{ sprint.id }}">{{ sprint.name }}</option>
+        {% set hl = sprint.data.health_label %}
+        <option value="{{ sprint.id }}">{{ sprint.name }} {% if hl == 'green' %}✔{% elif hl == 'amber' %}⚠{% else %}✘{% endif %} {{ sprint.data.health_score }}</option>
         {% endfor %}
       </select>
     </div>
@@ -169,6 +266,21 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
     {% for sprint in team.sprints %}
     {% set sdata = sprint.data %}
     <div class="sprint-summary-panel{% if loop.first %} active{% endif %}" id="sprint-{{ team.id }}-{{ sprint.id }}">
+
+      <!-- Sprint health banner -->
+      {% set hl = sdata.health_label %}
+      <div class="sprint-health-bar {{ hl }}">
+        <span class="health-dot health-dot-{{ hl }}"></span>
+        Sprint Health Score: <strong>{{ sdata.health_score }} / 100</strong>
+        &nbsp;—&nbsp;
+        {% if hl == 'green' %}Healthy sprint
+        {% elif hl == 'amber' %}Needs attention
+        {% else %}At risk
+        {% endif %}
+        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:.8">
+          Completion {{ sdata.completed }}/{{ sdata.total }} &nbsp;|&nbsp; Audit {{ sdata.audit_pass_rate }}%
+        </span>
+      </div>
 
       <!-- Summary cards (static; updated by JS when filtered) -->
       <div class="cards" id="cards-{{ team.id }}-{{ sprint.id }}">
@@ -192,6 +304,18 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
           <div class="value" id="c-rate-{{ team.id }}-{{ sprint.id }}">{{ sdata.audit_pass_rate }}%</div>
           <div class="label">Audit Pass Rate</div>
         </div>
+        <div class="card health-{{ sdata.health_label }}">
+          <div class="value">{{ sdata.health_score }}</div>
+          <div class="label">Health Score</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-devdays-{{ team.id }}-{{ sprint.id }}">{{ sdata.avg_dev_days if sdata.avg_dev_days is not none else '—' }}</div>
+          <div class="label">Avg Dev Days</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-qadays-{{ team.id }}-{{ sprint.id }}">{{ sdata.avg_qa_days if sdata.avg_qa_days is not none else '—' }}</div>
+          <div class="label">Avg QA Days</div>
+        </div>
       </div>
 
       <!-- Filter note -->
@@ -212,11 +336,13 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
               <th title="At least one GitHub PR linked">PR</th>
               <th title="At least one commit linked">Commits</th>
               <th title="GitHub PR has an approved review">Reviewed</th>
+              <th title="Calendar days in 'In Development' state" style="text-align:right">Dev Days</th>
+              <th title="Calendar days in 'QA' state" style="text-align:right">QA Days</th>
             </tr>
           </thead>
           <tbody>
             {% for s in sdata.stories %}
-            <tr data-assignee="{{ s.assigned_to | e }}">
+            <tr data-assignee="{{ s.assigned_to | e }}" data-tags="{{ s.tags | join(';') }}">
               <td class="id-col"><a href="{{ s.ado_url }}" target="_blank">#{{ s.id }}</a></td>
               <td class="title-col" title="{{ s.title }}">
                 {% if s.work_item_type == 'Bug' %}
@@ -231,6 +357,8 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
               <td class="audit">{% if s.has_pr %}<span class="pass" title="PR linked">✔</span>{% else %}<span class="fail" title="No PR linked">✘</span>{% endif %}</td>
               <td class="audit">{% if s.has_commit %}<span class="pass" title="Commit linked">✔</span>{% else %}<span class="fail" title="No commit">✘</span>{% endif %}</td>
               <td class="audit">{% if s.pr_reviewed %}<span class="pass" title="Approved review">✔</span>{% elif not s.has_pr %}<span style="color:#bbb" title="No PR">—</span>{% else %}<span class="fail" title="No approved review">✘</span>{% endif %}</td>
+              <td class="effort-col">{% if s.dev_days is not none %}{{ s.dev_days }}{% if s.dev_wip %}<span class="wip-star" title="Still in development">*</span>{% endif %}{% else %}—{% endif %}</td>
+              <td class="effort-col">{% if s.qa_days is not none %}{{ s.qa_days }}{% if s.qa_wip %}<span class="wip-star" title="Still in QA">*</span>{% endif %}{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -250,6 +378,44 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
       <canvas id="chart-{{ team.id }}"></canvas>
     </div>
 
+    </div>{# end sprint-view #}
+
+    <!-- ══════════ FEATURE VIEW ══════════ -->
+    <div class="view-panel" id="feature-view-{{ team.id }}">
+
+      <!-- Feature cards -->
+      <div class="feature-cards-grid" id="fcards-{{ team.id }}">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Feature detail panel (shown on card click) -->
+      <div class="feature-detail" id="fdetail-{{ team.id }}">
+        <div class="fd-header">
+          <h3 id="fd-title-{{ team.id }}"></h3>
+          <span class="fd-close" onclick="closeFeatureDetail('{{ team.id }}')">&#10005;</span>
+        </div>
+        <div class="fd-body">
+          <div class="fd-chart-wrap">
+            <canvas id="fd-chart-{{ team.id }}" style="max-height:180px"></canvas>
+          </div>
+          <div class="fd-roadblocks" id="fd-roadblocks-{{ team.id }}"></div>
+        </div>
+        <div class="fd-section-header">Work Items</div>
+        <div class="fd-table-wrap" style="padding:0 20px 20px">
+          <table class="fd-table">
+            <thead>
+              <tr>
+                <th>Sprint</th><th>Title</th><th>State</th>
+                <th>Assigned To</th><th class="num">Points</th>
+              </tr>
+            </thead>
+            <tbody id="fd-tbody-{{ team.id }}"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>{# end feature-view #}
+
   </div>
   {% endfor %}
 
@@ -262,8 +428,9 @@ var teamStoryData = {{ story_data | tojson }};
 
 var DONE_STATES = {'Resolved':1,'Done':1,'Closed':1};
 
-// ── Assignee filter state ──────────────────────────────────────────────────
-var activeAssignee = {};  // teamId → assignee name or "" (All)
+// ── Filter state ──────────────────────────────────────────────────────────
+var activeAssignee = {};  // teamId → assignee name or ""
+var activeTag      = {};  // teamId → tag string or ""
 
 function buildAssigneeFilters() {
   Object.keys(teamStoryData).forEach(function(teamId) {
@@ -274,50 +441,48 @@ function buildAssigneeFilters() {
       });
     });
     var names = Object.keys(seen).sort();
-    var container = document.getElementById('af-' + teamId);
-    if (!container) return;
-
-    // All pill
-    var allPill = makePill('All', teamId, true);
-    container.appendChild(allPill);
-
+    var sel = document.getElementById('af-' + teamId);
+    if (!sel) return;
     names.forEach(function(name) {
-      container.appendChild(makePill(name, teamId, false));
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
     });
   });
 }
 
-function makePill(name, teamId, isAll) {
-  var pill = document.createElement('div');
-  pill.className = 'af-pill' + (isAll ? ' active' : '');
-  pill.textContent = name;
-  pill.setAttribute('data-name', name);
-  pill.setAttribute('data-team', teamId);
-  pill.onclick = function() {
-    if (isAll || (activeAssignee[teamId] === name)) {
-      clearAssigneeFilter(teamId);
-    } else {
-      applyAssigneeFilter(teamId, name);
-    }
-  };
-  return pill;
+function onAssigneeChange(teamId, assignee) {
+  if (!assignee) {
+    clearAssigneeFilter(teamId);
+  } else {
+    applyAssigneeFilter(teamId, assignee);
+  }
 }
 
 function applyAssigneeFilter(teamId, assignee) {
   activeAssignee[teamId] = assignee;
 
-  // Update pills
-  var container = document.getElementById('af-' + teamId);
-  container.querySelectorAll('.af-pill').forEach(function(p) {
-    p.classList.toggle('active', p.getAttribute('data-name') === assignee ||
-                                  (assignee === '' && p.getAttribute('data-name') === 'All'));
-  });
-
   // Filter rows in every sprint table for this team
   var teamData = teamStoryData[teamId] || {};
   Object.keys(teamData).forEach(function(sprintId) {
-    filterSprintTable(teamId, sprintId, assignee);
+    filterSprintTable(teamId, sprintId);
   });
+
+  // Auto-switch to most recent non-backlog sprint
+  var nonBacklog = Object.keys(teamData).filter(function(id) {
+    return teamData[id].isCurrent;
+  });
+  if (nonBacklog.length > 0) {
+    nonBacklog.sort(function(a, b) {
+      var na = teamData[a].name || ''; var nb = teamData[b].name || '';
+      return na < nb ? -1 : na > nb ? 1 : 0;
+    });
+    var latestId = nonBacklog[nonBacklog.length - 1];
+    var sel = document.querySelector('#team-' + teamId + ' .sprint-select');
+    if (sel) sel.value = latestId;
+    switchSprint(teamId, latestId);
+  }
 
   // Show person summary panel
   showPersonSummary(teamId, assignee);
@@ -326,18 +491,10 @@ function applyAssigneeFilter(teamId, assignee) {
 function clearAssigneeFilter(teamId) {
   activeAssignee[teamId] = '';
 
-  // Reset pills
-  var container = document.getElementById('af-' + teamId);
-  if (container) {
-    container.querySelectorAll('.af-pill').forEach(function(p) {
-      p.classList.toggle('active', p.getAttribute('data-name') === 'All');
-    });
-  }
-
   // Show all rows in all sprint tables
   var teamData = teamStoryData[teamId] || {};
   Object.keys(teamData).forEach(function(sprintId) {
-    filterSprintTable(teamId, sprintId, '');
+    filterSprintTable(teamId, sprintId);
   });
 
   // Hide person summary
@@ -345,7 +502,9 @@ function clearAssigneeFilter(teamId) {
   if (ps) ps.style.display = 'none';
 }
 
-function filterSprintTable(teamId, sprintId, assignee) {
+function filterSprintTable(teamId, sprintId) {
+  var assignee = activeAssignee[teamId] || '';
+  var tag      = activeTag[teamId]      || '';
   var tbl = document.getElementById('tbl-' + teamId + '-' + sprintId);
   if (!tbl) return;
 
@@ -353,37 +512,43 @@ function filterSprintTable(teamId, sprintId, assignee) {
   var visible = 0;
   rows.forEach(function(row) {
     var ra = row.getAttribute('data-assignee') || '';
-    var show = !assignee || ra === assignee;
+    var rt = row.getAttribute('data-tags') || '';
+    var tagArr = rt ? rt.split(';').map(function(t){ return t.trim(); }) : [];
+    var show = (!assignee || ra === assignee) && (!tag || tagArr.indexOf(tag) !== -1);
     row.classList.toggle('hidden-row', !show);
     if (show) visible++;
   });
 
-  // Update summary cards for current sprint
-  updateCardsForFilter(teamId, sprintId, assignee);
+  updateCardsForFilter(teamId, sprintId);
 
-  // Show/hide "no stories" placeholder
   var nvr = document.getElementById('nvr-' + teamId + '-' + sprintId);
-  if (nvr) nvr.style.display = (visible === 0 && assignee) ? 'block' : 'none';
+  if (nvr) nvr.style.display = (visible === 0 && (assignee || tag)) ? 'block' : 'none';
 
-  // Update filter note
   var fn = document.getElementById('fn-' + teamId + '-' + sprintId);
   if (fn) {
-    if (assignee) {
+    var parts = [];
+    if (assignee) parts.push('assigned to ' + assignee);
+    if (tag) parts.push('tag: ' + tag);
+    if (parts.length) {
       fn.style.display = 'block';
-      fn.textContent = 'Filtered: showing ' + visible + ' stor' + (visible===1?'y':'ies') + ' assigned to ' + assignee;
+      fn.textContent = 'Filtered: showing ' + visible + ' item' + (visible===1?'':'s') + ' — ' + parts.join(', ');
     } else {
       fn.style.display = 'none';
     }
   }
 }
 
-function updateCardsForFilter(teamId, sprintId, assignee) {
+function updateCardsForFilter(teamId, sprintId) {
+  var assignee = activeAssignee[teamId] || '';
+  var tag      = activeTag[teamId]      || '';
   var data = (teamStoryData[teamId] || {})[sprintId];
   if (!data) return;
 
-  var stories = assignee
-    ? data.stories.filter(function(s){ return s.assignedTo === assignee; })
-    : data.stories;
+  var stories = data.stories.filter(function(s) {
+    var matchA = !assignee || s.assignedTo === assignee;
+    var matchT = !tag || (s.tags && s.tags.indexOf(tag) !== -1);
+    return matchA && matchT;
+  });
 
   var total = stories.length;
   var completed = stories.filter(function(s){ return DONE_STATES[s.state]; }).length;
@@ -391,7 +556,6 @@ function updateCardsForFilter(teamId, sprintId, assignee) {
   var donePts = stories.filter(function(s){ return DONE_STATES[s.state]; })
                        .reduce(function(a,s){ return a + (s.points || 0); }, 0);
 
-  // Audit pass rate (AC + PR + Commits + Points)
   var checks = total * 4;
   var passed = stories.reduce(function(a,s){
     return a + (s.hasAc?1:0) + (s.hasPr?1:0) + (s.hasCommit?1:0) + (s.hasPoints?1:0);
@@ -403,6 +567,35 @@ function updateCardsForFilter(teamId, sprintId, assignee) {
   setText('c-pts-'     + teamId + '-' + sprintId, pts.toFixed(1).replace(/\.0$/,''));
   setText('c-donepts-' + teamId + '-' + sprintId, donePts.toFixed(1).replace(/\.0$/,''));
   setText('c-rate-'    + teamId + '-' + sprintId, rate + '%');
+
+  var devS = stories.filter(function(s){return s.devDays!=null;}).map(function(s){return s.devDays;});
+  var qaS  = stories.filter(function(s){return s.qaDays!=null;}).map(function(s){return s.qaDays;});
+  var avgDev = devS.length ? (devS.reduce(function(a,v){return a+v;},0)/devS.length).toFixed(1) : '—';
+  var avgQa  = qaS.length  ? (qaS.reduce(function(a,v){return a+v;},0)/qaS.length).toFixed(1)  : '—';
+  setText('c-devdays-' + teamId + '-' + sprintId, avgDev);
+  setText('c-qadays-'  + teamId + '-' + sprintId, avgQa);
+
+  // Recompute health score for filtered view
+  var compRate = total > 0 ? completed / total : 1;
+  var totalRoadblocks = stories.reduce(function(a,s){ return a + (s.roadblockCount || 0); }, 0);
+  var rbPenalty = Math.min(totalRoadblocks * 10, 20);
+  var hs = Math.round(compRate * 40 + rate / 100 * 40 + (20 - rbPenalty));
+  hs = Math.max(0, Math.min(100, hs));
+  var hl = hs >= 75 ? 'green' : (hs >= 45 ? 'amber' : 'red');
+  var hCard = document.querySelector('#cards-' + teamId + '-' + sprintId + ' .card.health-green, #cards-' + teamId + '-' + sprintId + ' .card.health-amber, #cards-' + teamId + '-' + sprintId + ' .card.health-red');
+  if (hCard) {
+    hCard.className = 'card health-' + hl;
+    var hVal = hCard.querySelector('.value');
+    if (hVal) hVal.textContent = hs;
+  }
+  var hBar = document.querySelector('#sprint-' + teamId + '-' + sprintId + ' .sprint-health-bar');
+  if (hBar) {
+    hBar.className = 'sprint-health-bar ' + hl;
+    var hBarStrong = hBar.querySelector('strong');
+    if (hBarStrong) hBarStrong.textContent = hs + ' / 100';
+    var hDot = hBar.querySelector('.health-dot');
+    if (hDot) hDot.className = 'health-dot health-dot-' + hl;
+  }
 }
 
 function setText(id, val) {
@@ -461,6 +654,55 @@ function showPersonSummary(teamId, assignee) {
   setTimeout(function() {
     drawBarChart('ps-chart-' + teamId, chartLabels, chartDone, chartTotal, true);
   }, 50);
+
+  // Build all-completed items table (non-backlog sprints only, most-recent first)
+  var bugIcon = '<svg width="12" height="12" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:3px;flex-shrink:0"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>';
+  var storyIcon = '<svg width="12" height="12" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:3px;flex-shrink:0"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>';
+
+  var allCompleted = [];
+  sprintIds.forEach(function(sprintId) {
+    var data = teamData[sprintId];
+    if (!data.isCurrent) return; // skip backlog
+    (data.stories || []).forEach(function(s) {
+      if (s.assignedTo === assignee && DONE_STATES[s.state]) {
+        allCompleted.push(Object.assign({}, s, {sprintName: data.name}));
+      }
+    });
+  });
+  // Most-recent sprint first (sort descending by sprint name)
+  allCompleted.sort(function(a, b) {
+    return a.sprintName > b.sprintName ? -1 : a.sprintName < b.sprintName ? 1 : 0;
+  });
+
+  var completedTitle = document.getElementById('ps-completed-title-' + teamId);
+  if (completedTitle) completedTitle.textContent = 'All Completed Items — ' + assignee + ' (' + allCompleted.length + ')';
+
+  var completedWrap = document.getElementById('ps-completed-' + teamId);
+  if (!completedWrap) return;
+  if (!allCompleted.length) {
+    completedWrap.innerHTML = '<p style="color:#888;text-align:center;padding:16px;font-size:13px">No completed items found.</p>';
+    return;
+  }
+  var html = '<table class="ps-completed-table"><thead><tr>'
+    + '<th>Sprint</th><th>Title</th><th>State</th>'
+    + '<th class="num">Points</th><th class="num">Dev Days</th><th class="num">QA Days</th>'
+    + '</tr></thead><tbody>';
+  allCompleted.forEach(function(s) {
+    var icon = s.witType === 'Bug' ? bugIcon : storyIcon;
+    var titleCell = s.adoUrl
+      ? '<a href="' + escHtml(s.adoUrl) + '" target="_blank" style="color:#0d47a1;text-decoration:none">' + icon + escHtml(s.title) + '</a>'
+      : icon + escHtml(s.title);
+    html += '<tr>'
+      + '<td style="white-space:nowrap;font-size:11px;color:#555">' + escHtml(s.sprintName) + '</td>'
+      + '<td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(s.title) + '">' + titleCell + '</td>'
+      + '<td><span class="state-badge state-' + escHtml(s.state) + '">' + escHtml(s.state) + '</span></td>'
+      + '<td class="num">' + (s.points || '—') + '</td>'
+      + '<td class="num">' + (s.devDays != null ? s.devDays : '—') + '</td>'
+      + '<td class="num">' + (s.qaDays != null ? s.qaDays : '—') + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  completedWrap.innerHTML = html;
 }
 
 function escHtml(s) {
@@ -484,9 +726,37 @@ function switchSprint(teamId, sprintId) {
   var target = document.getElementById('sprint-' + teamId + '-' + sprintId);
   if (target) target.classList.add('active');
 
-  // Re-apply current assignee filter for the newly shown sprint
-  var assignee = activeAssignee[teamId] || '';
-  if (assignee) filterSprintTable(teamId, sprintId, assignee);
+  // Re-apply active filters for the newly shown sprint
+  filterSprintTable(teamId, sprintId);
+}
+
+// ── Tag filter ────────────────────────────────────────────────────────────
+function buildTagDropdowns() {
+  Object.keys(teamStoryData).forEach(function(teamId) {
+    var seen = {};
+    Object.keys(teamStoryData[teamId]).forEach(function(sprintId) {
+      (teamStoryData[teamId][sprintId].stories || []).forEach(function(s) {
+        (s.tags || []).forEach(function(tag) { if (tag) seen[tag] = true; });
+      });
+    });
+    var tags = Object.keys(seen).sort();
+    var sel = document.getElementById('tag-select-' + teamId);
+    if (!sel) return;
+    tags.forEach(function(tag) {
+      var opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = tag;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function applyTagFilter(teamId, tag) {
+  activeTag[teamId] = tag;
+  var teamData = teamStoryData[teamId] || {};
+  Object.keys(teamData).forEach(function(sprintId) {
+    filterSprintTable(teamId, sprintId);
+  });
 }
 
 // ── Canvas bar chart ───────────────────────────────────────────────────────
@@ -566,10 +836,136 @@ function drawBarChart(canvasId, labels, completedData, totalData, compact) {
   ctx.fillText('Completed', lx+78, ly+9);
 }
 
+// ── Feature View ──────────────────────────────────────────────────────────
+var featureData = {{ feature_data | tojson }};
+
+function toggleView(teamId, view) {
+  ['sprint', 'feature'].forEach(function(v) {
+    var panel = document.getElementById(v + '-view-' + teamId);
+    var btn   = document.getElementById('vbtn-' + v + '-' + teamId);
+    if (panel) panel.classList.toggle('active', v === view);
+    if (btn)   btn.classList.toggle('active', v === view);
+  });
+  if (view === 'feature') {
+    buildFeatureView(teamId);
+  }
+}
+
+var _featureViewBuilt = {};
+
+function buildFeatureView(teamId) {
+  if (_featureViewBuilt[teamId]) return;
+  _featureViewBuilt[teamId] = true;
+
+  var features = featureData[teamId] || [];
+  var container = document.getElementById('fcards-' + teamId);
+  if (!container) return;
+
+  features.forEach(function(fe, idx) {
+    var card = document.createElement('div');
+    card.className = 'feature-card';
+    card.setAttribute('data-idx', idx);
+    var rbBadge = fe.roadblocks.length
+      ? '<div class="fc-roadblock-badge">&#9888; ' + fe.roadblocks.length + ' roadblock' + (fe.roadblocks.length > 1 ? 's' : '') + '</div>'
+      : '';
+    card.innerHTML =
+      '<div class="fc-name" title="' + escHtml(fe.name) + '">' + escHtml(fe.name) + '</div>'
+      + '<div class="fc-counts">' + fe.completedItems + ' / ' + fe.totalItems + ' items &nbsp;&bull;&nbsp; '
+      + (fe.donePoints || 0) + ' / ' + (fe.totalPoints || 0) + ' pts</div>'
+      + '<div class="fc-bar-bg"><div class="fc-bar-fill" style="width:' + fe.completionPct + '%"></div></div>'
+      + '<div class="fc-pct">' + fe.completionPct + '% complete</div>'
+      + rbBadge;
+    card.onclick = function() { openFeatureDetail(teamId, idx); };
+    container.appendChild(card);
+  });
+
+}
+
+function openFeatureDetail(teamId, idx) {
+  var features = featureData[teamId] || [];
+  var fe = features[idx];
+  if (!fe) return;
+
+  // Highlight active card
+  var container = document.getElementById('fcards-' + teamId);
+  if (container) {
+    container.querySelectorAll('.feature-card').forEach(function(c) {
+      c.classList.toggle('active', parseInt(c.getAttribute('data-idx')) === idx);
+    });
+  }
+
+  document.getElementById('fd-title-' + teamId).textContent = fe.name + ' — Feature Detail';
+
+  // Roadblocks
+  var rbEl = document.getElementById('fd-roadblocks-' + teamId);
+  if (rbEl) {
+    if (fe.roadblocks.length) {
+      var items = fe.roadblocks.map(function(r) {
+        var wiLink = r.ado_url
+          ? '<a href="' + escHtml(r.ado_url) + '" target="_blank" style="color:#0d47a1;font-weight:700;text-decoration:none" title="Open work item">#' + r.id + ' ' + escHtml(r.title) + '</a>'
+          : '<strong>#' + r.id + ' ' + escHtml(r.title) + '</strong>';
+        return '<li style="margin-bottom:7px">'
+          + '<div style="font-size:11px;margin-bottom:2px">' + wiLink + '</div>'
+          + '<div style="color:#7a5200">' + escHtml(r.text) + '</div>'
+          + '</li>';
+      }).join('');
+      rbEl.innerHTML = '<h4>&#9888; Roadblocks / Blockers</h4><ul style="list-style:none;padding:0">' + items + '</ul>';
+      rbEl.style.display = '';
+    } else {
+      rbEl.innerHTML = '<h4 style="color:#2e7d32">&#10003; No roadblocks detected</h4>'
+        + '<p style="font-size:12px;color:#666;margin-top:6px">No blocking signals found in this feature\'s work items.</p>';
+      rbEl.style.background = '#f1f8e9';
+      rbEl.style.borderColor = '#a5d6a7';
+      rbEl.style.display = '';
+    }
+  }
+
+  // Sprint trend chart
+  setTimeout(function() {
+    var trend = fe.sprintTrend || [];
+    var labels  = trend.map(function(b) { return b.sprint.length > 14 ? b.sprint.slice(-14) : b.sprint; });
+    var totals  = trend.map(function(b) { return b.total; });
+    var done    = trend.map(function(b) { return b.completed; });
+    drawBarChart('fd-chart-' + teamId, labels, done, totals, true);
+  }, 50);
+
+  // Story table
+  var tbody = document.getElementById('fd-tbody-' + teamId);
+  if (tbody) {
+    var bugIcon = '<svg width="12" height="12" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:3px"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>';
+    var storyIcon = '<svg width="12" height="12" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:3px"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>';
+    var html = '';
+    (fe.stories || []).forEach(function(s) {
+      var icon = s.witType === 'Bug' ? bugIcon : storyIcon;
+      var titleCell = s.adoUrl
+        ? '<a href="' + escHtml(s.adoUrl) + '" target="_blank" style="color:#0d47a1;text-decoration:none">' + icon + escHtml(s.title) + '</a>'
+        : icon + escHtml(s.title);
+      html += '<tr>'
+        + '<td style="white-space:nowrap;font-size:11px;color:#555">' + escHtml(s.sprintName || '') + '</td>'
+        + '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(s.title) + '">' + titleCell + '</td>'
+        + '<td><span class="state-badge state-' + escHtml(s.state) + '">' + escHtml(s.state) + '</span></td>'
+        + '<td style="white-space:nowrap">' + escHtml(s.assignedTo || '') + '</td>'
+        + '<td class="num">' + (s.points || '—') + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;color:#888;padding:12px">No items.</td></tr>';
+  }
+
+  document.getElementById('fdetail-' + teamId).classList.add('active');
+}
+
+function closeFeatureDetail(teamId) {
+  var el = document.getElementById('fdetail-' + teamId);
+  if (el) el.classList.remove('active');
+  var container = document.getElementById('fcards-' + teamId);
+  if (container) container.querySelectorAll('.feature-card').forEach(function(c) { c.classList.remove('active'); });
+}
+
 // ── Initialise ─────────────────────────────────────────────────────────────
 var chartData = {{ chart_data | tojson }};
 window.addEventListener('load', function() {
   buildAssigneeFilters();
+  buildTagDropdowns();
   Object.keys(chartData).forEach(function(teamId) {
     var d = chartData[teamId];
     drawBarChart('chart-' + teamId, d.labels, d.completed, d.total, false);

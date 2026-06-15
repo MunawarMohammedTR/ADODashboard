@@ -260,15 +260,64 @@ class AzureDevOpsClient:
             results.extend(self._parse_json(resp).get("value", []))
         return results
 
+    def get_work_item_updates(self, wi_id: int) -> list[dict]:
+        """Return all field-update records for a work item (state-change history)."""
+        url = f"{self.proj_base}/_apis/wit/workitems/{wi_id}/updates"
+        data = self._get(url, params={"api-version": "7.1"})
+        return data.get("value", [])
+
     def parse_relations(self, work_item: dict) -> dict:
         pr_urls = []
         has_commit = False
+        parent_id = None
         for rel in work_item.get("relations") or []:
+            rel_type = rel.get("rel", "")
             rel_name = (rel.get("attributes") or {}).get("name", "")
             url = rel.get("url", "")
             if rel_name == _GITHUB_PR_RELATION:
                 pr_urls.append(url)
             elif rel_name == _GITHUB_COMMIT_RELATION:
                 has_commit = True
-        return {"pr_urls": pr_urls, "has_commit": has_commit}
+            elif rel_type == "System.LinkTypes.Hierarchy-Reverse" and parent_id is None:
+                # Extract numeric work item ID from the URL tail
+                m = re.search(r"/(\d+)$", url)
+                if m:
+                    parent_id = int(m.group(1))
+        return {"pr_urls": pr_urls, "has_commit": has_commit, "parent_id": parent_id}
+
+    def get_work_item_fields(self, ids: list[int], fields: list[str]) -> dict:
+        """Batch-fetch specific fields for a list of work item IDs.
+        Returns {id: fields_dict}. Uses POST workitemsbatch (no $expand).
+        """
+        if not ids:
+            return {}
+        result = {}
+        for start in range(0, len(ids), 200):
+            chunk = ids[start: start + 200]
+            url = f"{self.proj_base}/_apis/wit/workitemsbatch"
+            payload = {"ids": chunk, "fields": fields}
+            try:
+                data = self._post(url, payload, params={"api-version": "7.1"})
+                for item in data.get("value", []):
+                    result[item["id"]] = item.get("fields", {})
+            except Exception:
+                pass
+        return result
+
+    def get_work_item_comments(self, wi_id: int) -> list[str]:
+        """Return plain-text comment strings for a work item."""
+        url = f"{self.proj_base}/_apis/wit/workitems/{wi_id}/comments"
+        try:
+            data = self._get(url, params={"api-version": "7.1-preview.3"})
+            texts = []
+            for c in data.get("comments", []):
+                raw = c.get("text") or ""
+                # Strip HTML tags
+                plain = re.sub(r"<[^>]+>", " ", raw)
+                plain = re.sub(r"\s+", " ", plain).strip()
+                if plain:
+                    texts.append(plain)
+            return texts
+        except Exception:
+            return []
 
