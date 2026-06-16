@@ -367,11 +367,29 @@ def _process_team(
         print(f"  Resolving {len(parent_ids)} parent Feature titles...", end=" ", flush=True)
         parent_fields = ado.get_work_item_fields(
             list(parent_ids),
-            ["System.Id", "System.Title", "System.WorkItemType"],
+            ["System.Id", "System.Title", "System.WorkItemType", "System.Parent"],
         )
+        epic_ids: dict[int, int] = {}  # epic_id -> story's parent_id (the epic itself)
         for pid, flds in parent_fields.items():
-            if flds.get("System.WorkItemType") == "Feature":
+            wtype = flds.get("System.WorkItemType")
+            if wtype == "Feature":
                 feature_map[pid] = flds.get("System.Title") or f"Feature #{pid}"
+            elif wtype == "Epic":
+                grandparent = flds.get("System.Parent")
+                if grandparent:
+                    epic_ids[int(grandparent)] = pid
+
+        # Second pass: stories whose direct parent is an Epic — look up the Epic's parent Feature
+        if epic_ids:
+            grandparent_fields = ado.get_work_item_fields(
+                list(epic_ids.keys()),
+                ["System.Id", "System.Title", "System.WorkItemType"],
+            )
+            for gpid, flds in grandparent_fields.items():
+                if flds.get("System.WorkItemType") == "Feature":
+                    epic_id = epic_ids[gpid]
+                    feature_map[epic_id] = flds.get("System.Title") or f"Feature #{gpid}"
+
         print(f"{len(feature_map)} features found")
 
     comments_map: dict[int, list[str]] = {}
