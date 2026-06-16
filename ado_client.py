@@ -187,10 +187,40 @@ class AzureDevOpsClient:
             if trimmed:
                 all_iters = trimmed
             else:
-                print(
-                    f"  WARNING: START_SPRINT '{start_sprint}' did not match any iteration. "
-                    f"Using all {len(all_iters)} iterations."
-                )
+                # Name match failed — try to parse a date from the START_SPRINT value
+                # e.g. "2026/Q1/2026_S01_Dec31-Jan13" → startDate >= "2025-12-31"
+                date_m = re.search(r"(\d{4})[-_]S\d+[-_](\w{3})(\d{2})", start_sprint)
+                if date_m:
+                    months = {"jan": "01", "feb": "02", "mar": "03", "apr": "04",
+                              "may": "05", "jun": "06", "jul": "07", "aug": "08",
+                              "sep": "09", "oct": "10", "nov": "11", "dec": "12"}
+                    year = int(date_m.group(1))
+                    mon = months.get(date_m.group(2).lower(), "01")
+                    day = date_m.group(3)
+                    # Dec/Nov in a sprint labeled with the following year starts in prior year
+                    if mon in ("11", "12"):
+                        year -= 1
+                    cutoff = f"{year}-{mon}-{day}"
+                    date_trimmed = [
+                        s for s in all_iters
+                        if (s.get("attributes") or {}).get("startDate", "9999") >= cutoff
+                    ]
+                    if date_trimmed:
+                        print(
+                            f"  INFO: START_SPRINT '{start_sprint}' matched by date cutoff "
+                            f"{cutoff} ({len(date_trimmed)} sprints)."
+                        )
+                        all_iters = date_trimmed
+                    else:
+                        print(
+                            f"  WARNING: START_SPRINT '{start_sprint}' did not match any "
+                            f"iteration by name or date. Using all {len(all_iters)} iterations."
+                        )
+                else:
+                    print(
+                        f"  WARNING: START_SPRINT '{start_sprint}' did not match any iteration. "
+                        f"Using all {len(all_iters)} iterations."
+                    )
 
         # Use the last segment of the iteration path as the display name when it differs
         # from the generic "Sprint NNN" name ADO assigns internally
