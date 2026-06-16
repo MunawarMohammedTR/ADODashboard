@@ -192,6 +192,13 @@ class AzureDevOpsClient:
                     f"Using all {len(all_iters)} iterations."
                 )
 
+        # Use the last segment of the iteration path as the display name when it differs
+        # from the generic "Sprint NNN" name ADO assigns internally
+        for s in all_iters:
+            path_tail = (s.get("path") or "").split("\\")[-1].strip()
+            if path_tail and path_tail != s.get("name", ""):
+                s["name"] = path_tail
+
         # Return oldest-first (up to count), so the chart reads left-to-right chronologically
         return all_iters[:count]
 
