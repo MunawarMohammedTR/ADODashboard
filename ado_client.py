@@ -162,7 +162,8 @@ class AzureDevOpsClient:
             return []
 
     def get_sprints(self, team_id: str, count: int, start_sprint: str = "") -> list[dict]:
-        """Return sprints sorted oldest→newest, filtered from start_sprint onward."""
+        """Return up to count sprints sorted oldest→newest.
+        If start_sprint is set, begin from that sprint; otherwise use the most recent count."""
         all_iters = self._get_all_iterations(team_id)
 
         def sort_key(s):
@@ -170,9 +171,11 @@ class AzureDevOpsClient:
             return attrs.get("startDate") or attrs.get("finishDate") or s.get("name", "")
 
         all_iters.sort(key=sort_key)
+        print(f"  START_SPRINT={start_sprint!r}  total_iters={len(all_iters)}")
 
+        matched = False
         if start_sprint:
-            # Match on sprint name or the last segment of the iteration path
+            # Pass 1: match on sprint name or iteration path tail
             start_norm = _normalize(start_sprint.split("/")[-1])
             trimmed = []
             found = False
@@ -186,8 +189,9 @@ class AzureDevOpsClient:
                     trimmed.append(s)
             if trimmed:
                 all_iters = trimmed
+                matched = True
             else:
-                # Name match failed — try to parse a date from the START_SPRINT value
+                # Pass 2: parse a date from the START_SPRINT value and filter by startDate
                 # e.g. "2026/Q1/2026_S01_Dec31-Jan13" → startDate >= "2025-12-31"
                 date_m = re.search(r"(\d{4})[-_]S\d+[-_](\w{3})(\d{2})", start_sprint)
                 if date_m:
@@ -206,21 +210,20 @@ class AzureDevOpsClient:
                         if (s.get("attributes") or {}).get("startDate", "9999") >= cutoff
                     ]
                     if date_trimmed:
-                        print(
-                            f"  INFO: START_SPRINT '{start_sprint}' matched by date cutoff "
-                            f"{cutoff} ({len(date_trimmed)} sprints)."
-                        )
+                        print(f"  INFO: START_SPRINT matched by date cutoff {cutoff} "
+                              f"({len(date_trimmed)} sprints).")
                         all_iters = date_trimmed
+                        matched = True
                     else:
-                        print(
-                            f"  WARNING: START_SPRINT '{start_sprint}' did not match any "
-                            f"iteration by name or date. Using all {len(all_iters)} iterations."
-                        )
+                        print(f"  WARNING: START_SPRINT '{start_sprint}' matched nothing "
+                              f"by name or date — using most recent {count} sprints.")
                 else:
-                    print(
-                        f"  WARNING: START_SPRINT '{start_sprint}' did not match any iteration. "
-                        f"Using all {len(all_iters)} iterations."
-                    )
+                    print(f"  WARNING: START_SPRINT '{start_sprint}' matched nothing "
+                          f"— using most recent {count} sprints.")
+
+        # When no start anchor matched, take the most recent count sprints
+        if not matched:
+            all_iters = all_iters[-count:]
 
         # Use the last segment of the iteration path as the display name when it differs
         # from the generic "Sprint NNN" name ADO assigns internally
