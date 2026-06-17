@@ -16,6 +16,7 @@ _COL_DEV          = "In Development"   # board column name where dev work happen
 _COL_QA           = "QA"               # board column name where QA happens
 _track_effort     = os.environ.get("TRACK_EFFORT", "false").lower() == "true"
 _fetch_comments   = os.environ.get("FETCH_COMMENTS", "false").lower() == "true"
+_github_repo      = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "tr/confirmation_api-adapter-be"
 _ADO_ORG_RE = re.compile(r"https?://dev\.azure\.com/([^/]+)")
 
 _BLOCKER_RE = re.compile(
@@ -135,7 +136,14 @@ def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
     pr_reviewed = any(gh.has_approved_review(url) for url in relations["pr_urls"])
 
     pr_html_url = None
-    if relations["pr_urls"]:
+    pr_details: list[dict] = []
+    for raw_url in relations["pr_urls"]:
+        details = gh.get_pr_details(raw_url)
+        if details:
+            pr_details.append(details)
+    if pr_details and not pr_html_url:
+        pr_html_url = pr_details[0]["html_url"]
+    elif relations["pr_urls"] and not pr_html_url:
         pr_html_url = gh.get_pr_html_url(relations["pr_urls"][0])
 
     wi_id = work_item["id"]
@@ -184,6 +192,7 @@ def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
         "has_commit": has_commit,
         "pr_reviewed": pr_reviewed,
         "pr_url": pr_html_url,
+        "pr_details": pr_details,
         "dev_days": effort["dev_days"],
         "dev_wip":  effort["dev_wip"],
         "qa_days":  effort["qa_days"],
@@ -191,6 +200,32 @@ def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
         "feature":  feature_name,
         "roadblocks": roadblocks,
     }
+
+
+def _pr_by_individual_from_list(prs: list[dict]) -> dict[str, dict]:
+    """Aggregate a flat list of PR dicts (from GitHub direct query) into per-author stats."""
+    result: dict[str, dict] = {}
+    seen: set[str] = set()
+    for pr in prs:
+        url = pr.get("html_url") or ""
+        if url in seen:
+            continue
+        seen.add(url)
+        author = pr.get("author_login") or "Unknown"
+        if author not in result:
+            result[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
+        rec = result[author]
+        rec["prs_raised"] += 1
+        if pr.get("merged_to_master"):
+            rec["merged_to_master"] += 1
+        else:
+            rec["not_merged"] += 1
+        if pr.get("ai_labeled"):
+            rec["ai_labeled"] += 1
+    for rec in result.values():
+        total = rec["prs_raised"]
+        rec["pct_deployed"] = round(rec["merged_to_master"] / total * 100, 1) if total else 0.0
+    return result
 
 
 def _sprint_summary(stories: list[dict]) -> dict:
@@ -229,6 +264,43 @@ def _sprint_summary(stories: list[dict]) -> dict:
     health_score = max(0, min(100, health_score))
     health_label = "green" if health_score >= 75 else ("amber" if health_score >= 45 else "red")
 
+    # PR stats per individual — keyed by GitHub author login (falls back to ADO assignee)
+    pr_by_individual: dict[str, dict] = {}
+    seen_prs: set[str] = set()
+    for s in stories:
+        pr_details = s.get("pr_details") or []
+        pr_urls = [p.get("html_url") or "" for p in pr_details]
+
+        # Fallback: if no resolved PR details but work item has a PR URL, count via ADO assignee
+        if not pr_details and s.get("has_pr"):
+            key = f"_raw_{s['id']}"
+            if key not in seen_prs:
+                seen_prs.add(key)
+                author = s.get("assigned_to") or "Unknown"
+                if author not in pr_by_individual:
+                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0}
+                pr_by_individual[author]["prs_raised"] += 1
+                pr_by_individual[author]["not_merged"] += 1
+            continue
+
+        for pr in pr_details:
+            url = pr.get("html_url") or ""
+            if url in seen_prs:
+                continue
+            seen_prs.add(url)
+            author = pr.get("author_login") or s.get("assigned_to") or "Unknown"
+            if author not in pr_by_individual:
+                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0}
+            rec = pr_by_individual[author]
+            rec["prs_raised"] += 1
+            if pr.get("merged_to_master"):
+                rec["merged_to_master"] += 1
+            else:
+                rec["not_merged"] += 1
+    for rec in pr_by_individual.values():
+        total_raised = rec["prs_raised"]
+        rec["pct_deployed"] = round(rec["merged_to_master"] / total_raised * 100, 1) if total_raised else 0.0
+
     return {
         "total": total,
         "completed": completed,
@@ -244,6 +316,7 @@ def _sprint_summary(stories: list[dict]) -> dict:
         "avg_qa_days":  avg_qa_days,
         "health_score": health_score,
         "health_label": health_label,
+        "pr_by_individual": pr_by_individual,
         "stories": stories,
     }
 
@@ -412,13 +485,25 @@ def _process_team(
             )
             for wi in filtered
         ]
+        sprint_start  = (sprint.get("attributes") or {}).get("startDate", "")
+        sprint_finish = (sprint.get("attributes") or {}).get("finishDate", "")
+        summary = _sprint_summary(stories)
+
+        # Override pr_by_individual with a direct GitHub repo query if configured
+        if _github_repo and sprint_start and sprint_finish:
+            print(f"  [GitHub] Fetching PRs for {sprint['name']} ({sprint_start[:10]}..{sprint_finish[:10]})...", end=" ", flush=True)
+            gh_prs = gh.get_prs_for_sprint(_github_repo, sprint_start, sprint_finish)
+            print(f"{len(gh_prs)} PR(s)")
+            if gh_prs:
+                summary["pr_by_individual"] = _pr_by_individual_from_list(gh_prs)
+
         sprint_out.append({
             "id": sprint["id"],
             "name": sprint["name"],
-            "start": (sprint.get("attributes") or {}).get("startDate", ""),
-            "finish": (sprint.get("attributes") or {}).get("finishDate", ""),
+            "start": sprint_start,
+            "finish": sprint_finish,
             "is_backlog": False,
-            "data": _sprint_summary(stories),
+            "data": summary,
         })
 
     if include_backlog:

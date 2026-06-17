@@ -48,6 +48,7 @@ def _build_story_data(teams: list[dict]) -> dict:
                 "isCurrent": not sprint.get("is_backlog", False),
                 "healthScore": sprint["data"]["health_score"],
                 "healthLabel": sprint["data"]["health_label"],
+                "prByIndividual": sprint["data"].get("pr_by_individual", {}),
                 "stories": [
                     {
                         "id": s["id"],

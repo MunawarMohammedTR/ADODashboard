@@ -134,6 +134,22 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
 .view-panel{display:none}
 .view-panel.active{display:block}
 
+/* PR View */
+.pr-sprint-bar{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.pr-sprint-bar label{font-weight:600;color:#1a237e}
+.pr-sprint-sel{padding:7px 12px;border:1px solid #c5cae9;border-radius:6px;font-size:13px;background:#fff;cursor:pointer;min-width:220px}
+.pr-table-wrap{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:auto;margin-bottom:32px}
+.pr-table{width:100%;border-collapse:collapse;font-size:13px}
+.pr-table thead th{background:#1a237e;color:#fff;padding:10px 14px;text-align:left;position:sticky;top:0;white-space:nowrap;font-weight:600}
+.pr-table tbody tr:nth-child(even){background:#f5f7ff}
+.pr-table tbody tr:hover{background:#e8eaf6}
+.pr-table td{padding:10px 14px;border-bottom:1px solid #e8eaf6;vertical-align:middle}
+.pr-table td.num{text-align:right;font-weight:600}
+.pr-pct-green{color:#2e7d32;font-weight:700}
+.pr-pct-amber{color:#b45309;font-weight:700}
+.pr-pct-red{color:#c62828;font-weight:700}
+.pr-no-data{text-align:center;padding:40px;color:#888;font-size:15px}
+
 /* Feature cards */
 .feature-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px}
 .feature-card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.09);padding:16px 18px;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
@@ -195,10 +211,11 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
   {% for team in teams %}
   <div class="team-panel{% if loop.first %} active{% endif %}" id="team-{{ team.id }}">
 
-    <!-- View toggle: Sprint / Feature -->
+    <!-- View toggle: Sprint / Feature / PR -->
     <div class="view-toggle">
       <div class="view-btn active" id="vbtn-sprint-{{ team.id }}" onclick="toggleView('{{ team.id }}','sprint')">Sprint View</div>
       <div class="view-btn" id="vbtn-feature-{{ team.id }}" onclick="toggleView('{{ team.id }}','feature')">Feature View</div>
+      <div class="view-btn" id="vbtn-pr-{{ team.id }}" onclick="toggleView('{{ team.id }}','pr')">PR View</div>
     </div>
 
     <!-- ══════════ SPRINT VIEW ══════════ -->
@@ -415,6 +432,28 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
       </div>
 
     </div>{# end feature-view #}
+
+    <!-- ══════════ PR VIEW ══════════ -->
+    <div class="view-panel" id="pr-view-{{ team.id }}">
+
+      <!-- Sprint selector for PR view -->
+      <div class="pr-sprint-bar">
+        <label>Sprint:</label>
+        <select class="pr-sprint-sel" id="pr-sprint-sel-{{ team.id }}" onchange="buildPRView('{{ team.id }}', this.value)">
+          {% for sprint in team.sprints %}
+          {% if not sprint.is_backlog %}
+          <option value="{{ sprint.id }}">{{ sprint.name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- PR table populated by JS -->
+      <div class="pr-table-wrap" id="pr-table-wrap-{{ team.id }}">
+        <div class="pr-no-data">Select a sprint to view PR statistics.</div>
+      </div>
+
+    </div>{# end pr-view #}
 
   </div>
   {% endfor %}
@@ -840,7 +879,7 @@ function drawBarChart(canvasId, labels, completedData, totalData, compact) {
 var featureData = {{ feature_data | tojson }};
 
 function toggleView(teamId, view) {
-  ['sprint', 'feature'].forEach(function(v) {
+  ['sprint', 'feature', 'pr'].forEach(function(v) {
     var panel = document.getElementById(v + '-view-' + teamId);
     var btn   = document.getElementById('vbtn-' + v + '-' + teamId);
     if (panel) panel.classList.toggle('active', v === view);
@@ -848,7 +887,59 @@ function toggleView(teamId, view) {
   });
   if (view === 'feature') {
     buildFeatureView(teamId);
+  } else if (view === 'pr') {
+    var sel = document.getElementById('pr-sprint-sel-' + teamId);
+    if (sel && sel.value) buildPRView(teamId, sel.value);
   }
+}
+
+function buildPRView(teamId, sprintId) {
+  var wrap = document.getElementById('pr-table-wrap-' + teamId);
+  if (!wrap) return;
+
+  var sprintData = (teamStoryData[teamId] || {})[sprintId];
+  var prByIndividual = sprintData ? (sprintData.prByIndividual || {}) : {};
+  var sprintName = sprintData ? sprintData.name : '';
+
+  var rows = Object.keys(prByIndividual).map(function(author) {
+    return { author: author, data: prByIndividual[author] };
+  });
+  rows.sort(function(a, b) { return b.data.prs_raised - a.data.prs_raised; });
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="pr-no-data">No PR data found for this sprint.<br><small style="color:#aaa">PRs are tracked from GitHub links on ADO work items.</small></div>';
+    return;
+  }
+
+  var html = '<table class="pr-table"><thead><tr>'
+    + '<th>Individual (GitHub)</th>'
+    + '<th style="text-align:right">PRs Raised</th>'
+    + '<th style="text-align:right">Merged to Master</th>'
+    + '<th style="text-align:right">Not Merged</th>'
+    + '<th style="text-align:right">% Deployed</th>'
+    + '<th style="text-align:right" title="PRs labelled AI Generated / AI Assisted / AI Powered">AI-Labeled PRs</th>'
+    + '</tr></thead><tbody>';
+
+  rows.forEach(function(r) {
+    var d = r.data;
+    var pct = d.pct_deployed;
+    var pctClass = pct >= 80 ? 'pr-pct-green' : (pct >= 50 ? 'pr-pct-amber' : 'pr-pct-red');
+    var aiCount = d.ai_labeled || 0;
+    var aiCell = aiCount > 0
+      ? '<span style="background:#e8f5e9;color:#2e7d32;font-weight:700;padding:2px 8px;border-radius:10px;font-size:12px">&#129302; ' + aiCount + '</span>'
+      : '<span style="color:#bbb">0</span>';
+    html += '<tr>'
+      + '<td>' + escHtml(r.author) + '</td>'
+      + '<td class="num">' + d.prs_raised + '</td>'
+      + '<td class="num">' + d.merged_to_master + '</td>'
+      + '<td class="num">' + d.not_merged + '</td>'
+      + '<td class="num ' + pctClass + '">' + pct + '%</td>'
+      + '<td class="num">' + aiCell + '</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
 }
 
 var _featureViewBuilt = {};
@@ -969,6 +1060,12 @@ window.addEventListener('load', function() {
   Object.keys(chartData).forEach(function(teamId) {
     var d = chartData[teamId];
     drawBarChart('chart-' + teamId, d.labels, d.completed, d.total, false);
+  });
+  // Pre-select last sprint in PR View dropdowns
+  Object.keys(teamStoryData).forEach(function(teamId) {
+    var sel = document.getElementById('pr-sprint-sel-' + teamId);
+    if (!sel || !sel.options.length) return;
+    sel.selectedIndex = sel.options.length - 1;
   });
 });
 </script>
