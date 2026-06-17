@@ -278,7 +278,7 @@ def _sprint_summary(stories: list[dict]) -> dict:
                 seen_prs.add(key)
                 author = s.get("assigned_to") or "Unknown"
                 if author not in pr_by_individual:
-                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0}
+                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
                 pr_by_individual[author]["prs_raised"] += 1
                 pr_by_individual[author]["not_merged"] += 1
             continue
@@ -290,13 +290,15 @@ def _sprint_summary(stories: list[dict]) -> dict:
             seen_prs.add(url)
             author = pr.get("author_login") or s.get("assigned_to") or "Unknown"
             if author not in pr_by_individual:
-                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0}
+                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
             rec = pr_by_individual[author]
             rec["prs_raised"] += 1
             if pr.get("merged_to_master"):
                 rec["merged_to_master"] += 1
             else:
                 rec["not_merged"] += 1
+            if pr.get("ai_labeled"):
+                rec["ai_labeled"] += 1
     for rec in pr_by_individual.values():
         total_raised = rec["prs_raised"]
         rec["pct_deployed"] = round(rec["merged_to_master"] / total_raised * 100, 1) if total_raised else 0.0
@@ -493,7 +495,8 @@ def _process_team(
         if _github_repo and sprint_start and sprint_finish:
             print(f"  [GitHub] Fetching PRs for {sprint['name']} ({sprint_start[:10]}..{sprint_finish[:10]})...", end=" ", flush=True)
             gh_prs = gh.get_prs_for_sprint(_github_repo, sprint_start, sprint_finish)
-            print(f"{len(gh_prs)} PR(s)")
+            ai_count = sum(1 for p in gh_prs if p.get("ai_labeled"))
+            print(f"{len(gh_prs)} PR(s), {ai_count} AI-labeled")
             if gh_prs:
                 summary["pr_by_individual"] = _pr_by_individual_from_list(gh_prs)
 

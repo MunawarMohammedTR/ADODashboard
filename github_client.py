@@ -14,6 +14,7 @@ _PR_URL_PATTERN = re.compile(
 _VSTFS_PR_PATTERN = re.compile(
     r"vstfs:///GitHub/PullRequest/([^%]+)%2[Ff](\d+)", re.IGNORECASE
 )
+_AI_LABEL_RE = re.compile(r"ai[\s_-]*(generated|assisted|powered)", re.IGNORECASE)
 
 
 class GitHubClient:
@@ -155,7 +156,6 @@ class GitHubClient:
                 items = data.get("items", [])
                 if not items:
                     break
-                _AI_LABEL_RE = re.compile(r"ai[\s_-]*(generated|assisted|powered)", re.IGNORECASE)
                 for item in items:
                     pr_url = item.get("pull_request", {}).get("html_url") or item.get("html_url", "")
                     merged_at = item.get("pull_request", {}).get("merged_at")
