@@ -76,7 +76,7 @@ def _build_story_data(teams: list[dict]) -> dict:
     return out
 
 
-def generate_report(data: dict, output_dir: str = ".") -> str:
+def generate_report(data: dict, output_dir: str = ".", serve_mode: bool = False) -> tuple[str, str]:
     template_dir = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
     template = env.get_template("report.html.j2")
@@ -99,9 +99,10 @@ def generate_report(data: dict, output_dir: str = ".") -> str:
         chart_data=chart_data,
         story_data=_build_story_data(data["teams"]),
         feature_data=_build_feature_js_data(data["teams"]),
+        serve_mode=serve_mode,
     )
 
     filename = f"ado_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
     out_path = Path(output_dir) / filename
     out_path.write_text(html, encoding="utf-8")
-    return str(out_path)
+    return str(out_path), html

@@ -1,3 +1,5 @@
+import concurrent.futures
+import json
 import os
 import re
 import sys
@@ -16,8 +18,26 @@ _COL_DEV          = "In Development"   # board column name where dev work happen
 _COL_QA           = "QA"               # board column name where QA happens
 _track_effort     = os.environ.get("TRACK_EFFORT", "false").lower() == "true"
 _fetch_comments   = os.environ.get("FETCH_COMMENTS", "false").lower() == "true"
-_github_repo      = os.environ.get("GITHUB_REPO", "").strip()  # e.g. "tr/confirmation_api-adapter-be"
+_github_repos     = [r.strip() for r in os.environ.get("GITHUB_REPO", "tr/confirmation_api-adapter-be,tr/confirmation_nucleus-be,tr/confirmation_primary-record-service,tr/confirmation_api_proxy-be,tr/confirmation_file-base-auto-process-be,tr/confirmation_forms-be,tr/confirmation_self-registration-be,tr/confirmation_emails-be,tr/confirmation_libraries,tr/confirmation_authorizations-be,tr/confirmation_pricing-be,tr/confirmation_local-stack,tr/confirmation_web-components-fe,tr/confirmation_web-components-be,tr/confirmation_reports-be,tr/confirmation_iam-be,tr/confirmation_legacy-data-scripts-dbtr/confirmation_legacy-external-api,tr/confirmation_legacy-internal-api,tr/confirmation_legacy-libraries,tr/confirmation_legacy-schema-db,tr/confirmation_legacy-thirdparty-libs,tr/confirmation_legacy-web-apps-be").split(",") if r.strip()]
 _ADO_ORG_RE = re.compile(r"https?://dev\.azure\.com/([^/]+)")
+
+# GitHub login → ADO display name mapping (github_login_map.json)
+_LOGIN_MAP_PATH = os.path.join(os.path.dirname(__file__), "github_login_map.json")
+try:
+    with open(_LOGIN_MAP_PATH, encoding="utf-8") as _f:
+        _login_to_ado: dict[str, str] = {
+            k: v for k, v in json.load(_f).items() if not k.startswith("_")
+        }
+    print(f"  [Config] Loaded {len(_login_to_ado)} GitHub login -> ADO name mapping(s)")
+except FileNotFoundError:
+    _login_to_ado = {}
+except Exception as _e:
+    print(f"  [Config] Warning: could not load github_login_map.json: {_e}")
+    _login_to_ado = {}
+
+# Cache GitHub PR fetches by (start, finish) window so multiple teams sharing
+# the same sprint dates don't repeat identical REST calls.
+_sprint_pr_cache: dict[tuple[str, str], list[dict]] = {}
 
 _BLOCKER_RE = re.compile(
     r".{0,60}(?:blocked|blocker|blocking|impediment|waiting on|on hold|pending|dependency|risk|stuck).{0,60}",
@@ -202,8 +222,12 @@ def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
     }
 
 
-def _pr_by_individual_from_list(prs: list[dict]) -> dict[str, dict]:
-    """Aggregate a flat list of PR dicts (from GitHub direct query) into per-author stats."""
+def _pr_by_individual_from_list(prs: list[dict], login_to_ado: dict[str, str] | None = None) -> dict[str, dict]:
+    """Aggregate a flat list of PR dicts (from GitHub direct query) into per-author stats.
+
+    login_to_ado maps GitHub login → ADO display name, built from sprint stories.
+    Each entry gets an 'assigned_to' field for filtering in the PR View.
+    """
     result: dict[str, dict] = {}
     seen: set[str] = set()
     for pr in prs:
@@ -213,7 +237,12 @@ def _pr_by_individual_from_list(prs: list[dict]) -> dict[str, dict]:
         seen.add(url)
         author = pr.get("author_login") or "Unknown"
         if author not in result:
-            result[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
+            ado_name = (login_to_ado or {}).get(author, "")
+            result[author] = {
+                "prs_raised": 0, "merged_to_master": 0, "not_merged": 0,
+                "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": [],
+                "assigned_to": ado_name,
+            }
         rec = result[author]
         rec["prs_raised"] += 1
         if pr.get("merged_to_master"):
@@ -222,6 +251,12 @@ def _pr_by_individual_from_list(prs: list[dict]) -> dict[str, dict]:
             rec["not_merged"] += 1
         if pr.get("ai_labeled"):
             rec["ai_labeled"] += 1
+            repo = "/".join((pr.get("html_url") or "").rstrip("/").split("/")[-4:-2]) if pr.get("html_url") else ""
+            rec["ai_labeled_prs"].append({
+                "repo": repo,
+                "number": pr.get("number"),
+                "html_url": pr.get("html_url", ""),
+            })
     for rec in result.values():
         total = rec["prs_raised"]
         rec["pct_deployed"] = round(rec["merged_to_master"] / total * 100, 1) if total else 0.0
@@ -278,7 +313,7 @@ def _sprint_summary(stories: list[dict]) -> dict:
                 seen_prs.add(key)
                 author = s.get("assigned_to") or "Unknown"
                 if author not in pr_by_individual:
-                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
+                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": []}
                 pr_by_individual[author]["prs_raised"] += 1
                 pr_by_individual[author]["not_merged"] += 1
             continue
@@ -290,7 +325,7 @@ def _sprint_summary(stories: list[dict]) -> dict:
             seen_prs.add(url)
             author = pr.get("author_login") or s.get("assigned_to") or "Unknown"
             if author not in pr_by_individual:
-                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0}
+                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": []}
             rec = pr_by_individual[author]
             rec["prs_raised"] += 1
             if pr.get("merged_to_master"):
@@ -299,6 +334,12 @@ def _sprint_summary(stories: list[dict]) -> dict:
                 rec["not_merged"] += 1
             if pr.get("ai_labeled"):
                 rec["ai_labeled"] += 1
+                repo = "/".join(url.rstrip("/").split("/")[-4:-2]) if url else ""
+                rec["ai_labeled_prs"].append({
+                    "repo": repo,
+                    "number": pr.get("number"),
+                    "html_url": url,
+                })
     for rec in pr_by_individual.values():
         total_raised = rec["prs_raised"]
         rec["pct_deployed"] = round(rec["merged_to_master"] / total_raised * 100, 1) if total_raised else 0.0
@@ -492,13 +533,31 @@ def _process_team(
         summary = _sprint_summary(stories)
 
         # Override pr_by_individual with a direct GitHub repo query if configured
-        if _github_repo and sprint_start and sprint_finish:
-            print(f"  [GitHub] Fetching PRs for {sprint['name']} ({sprint_start[:10]}..{sprint_finish[:10]})...", end=" ", flush=True)
-            gh_prs = gh.get_prs_for_sprint(_github_repo, sprint_start, sprint_finish)
-            ai_count = sum(1 for p in gh_prs if p.get("ai_labeled"))
-            print(f"{len(gh_prs)} PR(s), {ai_count} AI-labeled")
-            if gh_prs:
-                summary["pr_by_individual"] = _pr_by_individual_from_list(gh_prs)
+        if _github_repos and sprint_start and sprint_finish:
+            cache_key = (sprint_start[:10], sprint_finish[:10])
+            if cache_key in _sprint_pr_cache:
+                all_gh_prs = _sprint_pr_cache[cache_key]
+                print(f"  [GitHub] Sprint {cache_key[0]}/{cache_key[1]}: cache hit ({len(all_gh_prs)} PR(s))")
+            else:
+                all_gh_prs = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    future_to_repo = {
+                        executor.submit(gh.get_prs_for_sprint, repo, sprint_start, sprint_finish): repo
+                        for repo in _github_repos
+                    }
+                    for future in concurrent.futures.as_completed(future_to_repo):
+                        repo = future_to_repo[future]
+                        try:
+                            repo_prs = future.result()
+                        except Exception as exc:
+                            print(f"  [GitHub] {repo} fetch failed: {exc}")
+                            repo_prs = []
+                        ai_count = sum(1 for p in repo_prs if p.get("ai_labeled"))
+                        print(f"  [GitHub] {repo}: {len(repo_prs)} PR(s), {ai_count} AI-labeled")
+                        all_gh_prs.extend(repo_prs)
+                _sprint_pr_cache[cache_key] = all_gh_prs
+            if all_gh_prs:
+                summary["pr_by_individual"] = _pr_by_individual_from_list(all_gh_prs, _login_to_ado)
 
         sprint_out.append({
             "id": sprint["id"],
@@ -577,7 +636,112 @@ def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient) -> dict:
     }
 
 
-def main():
+def _run_serve_mode(ado: "AzureDevOpsClient", gh: "GitHubClient", port: int = 8080) -> None:
+    import http.server
+    import json as _json
+    import threading
+    import webbrowser
+
+    output_dir = os.environ.get("OUTPUT_DIR", ".")
+
+    # Shared state protected by a lock
+    _lock = threading.Lock()
+    _state: dict = {
+        "html": b"",
+        "refreshing": False,  # True while background fetch is running
+        "error": None,        # last error message, or None
+    }
+
+    def _regenerate() -> None:
+        data = build_report_data(ado, gh)
+        _, html = generate_report(data, output_dir, serve_mode=True)
+        with _lock:
+            _state["html"] = html.encode("utf-8")
+
+    def _refresh_worker() -> None:
+        try:
+            _regenerate()
+            with _lock:
+                _state["refreshing"] = False
+                _state["error"] = None
+        except Exception as exc:
+            with _lock:
+                _state["refreshing"] = False
+                _state["error"] = str(exc)
+
+    def _json_response(handler: "http.server.BaseHTTPRequestHandler", status: int, payload: dict) -> None:
+        resp = _json.dumps(payload).encode()
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Content-Length", str(len(resp)))
+        handler.end_headers()
+        handler.wfile.write(resp)
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path in ("/", "/index.html"):
+                with _lock:
+                    body = _state["html"]
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            elif self.path == "/status":
+                with _lock:
+                    payload = {
+                        "refreshing": _state["refreshing"],
+                        "error": _state["error"],
+                    }
+                _json_response(self, 200, payload)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def do_POST(self) -> None:
+            if self.path == "/refresh":
+                with _lock:
+                    already = _state["refreshing"]
+                    if not already:
+                        _state["refreshing"] = True
+                        _state["error"] = None
+                if already:
+                    _json_response(self, 200, {"started": False, "reason": "already running"})
+                else:
+                    threading.Thread(target=_refresh_worker, daemon=True).start()
+                    _json_response(self, 200, {"started": True})
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *args) -> None:  # noqa: ANN002
+            pass  # suppress default per-request stdout noise
+
+    print("Fetching initial data...")
+    _regenerate()
+
+    server = http.server.HTTPServer(("localhost", port), _Handler)
+    url = f"http://localhost:{port}/"
+    print(f"\nDashboard ready at {url}  (Ctrl+C to stop)\n")
+    # Open browser in a background thread so the server starts first
+    threading.Timer(0.5, webbrowser.open, args=(url,)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServer stopped.")
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    serve_mode = "--serve" in args
+    port = 8080
+    if "--port" in args:
+        idx = args.index("--port")
+        try:
+            port = int(args[idx + 1])
+        except (IndexError, ValueError):
+            print("--port requires an integer value; defaulting to 8080.")
+
     ado = AzureDevOpsClient()
     gh = GitHubClient(ado_session=ado.session, ado_base=ado.base)
 
@@ -585,10 +749,13 @@ def main():
     print("ADO Manager Dashboard Generator")
     print("=" * 60)
 
-    data = build_report_data(ado, gh)
+    if serve_mode:
+        _run_serve_mode(ado, gh, port=port)
+        return
 
+    data = build_report_data(ado, gh)
     output_dir = os.environ.get("OUTPUT_DIR", ".")
-    out_path = generate_report(data, output_dir)
+    out_path, _ = generate_report(data, output_dir)
     print(f"\nReport written to: {out_path}")
     print("Open it in any browser.")
 

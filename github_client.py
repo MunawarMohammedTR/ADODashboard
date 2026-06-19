@@ -1,5 +1,6 @@
 import os
 import re
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -32,6 +33,19 @@ class GitHubClient:
         self._ado_session = ado_session
         self._ado_base = ado_base
         self._connection_cache: dict[str, str] = {}  # guid → "owner/repo"
+
+    def _gh_get(self, url: str, params: dict = None, timeout: int = 20, retries: int = 5) -> requests.Response:
+        """GET with exponential backoff on 403/429 (rate limit) responses."""
+        delay = 60  # GitHub search rate limit resets every 60 s
+        for attempt in range(retries):
+            resp = self.session.get(url, params=params, timeout=timeout)
+            if resp.status_code not in (403, 429):
+                return resp
+            retry_after = int(resp.headers.get("Retry-After", 0))
+            wait = retry_after if retry_after > 0 else delay * (2 ** attempt)
+            print(f"\n  [GitHub] Rate limited ({resp.status_code}). Waiting {wait}s before retry {attempt + 1}/{retries}...", flush=True)
+            time.sleep(wait)
+        return resp  # return last response if all retries exhausted
 
     def _resolve_connection(self, guid: str) -> str | None:
         """Return 'owner/repo' for a GitHub connection GUID via ADO service endpoints."""
@@ -99,7 +113,7 @@ class GitHubClient:
 
         owner, repo, pr_num = m.group(1), m.group(2), m.group(3)
         try:
-            resp = self.session.get(
+            resp = self._gh_get(
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}",
                 timeout=15,
             )
@@ -126,69 +140,88 @@ class GitHubClient:
         self._pr_details_cache[raw_url] = result
         return result
 
-    def get_prs_for_sprint(self, owner_repo: str, start: str, finish: str) -> list[dict]:
-        """Fetch all PRs from owner_repo whose created_at falls within [start, finish].
+    def _get_prs_via_list(self, owner_repo: str, start: str, finish: str) -> list[dict]:
+        """Fetch PRs using GET /repos/{owner}/{repo}/pulls (returns base.ref natively).
 
-        Uses GitHub Search API (no pagination > 1000 results expected for a sprint).
-        Returns list of dicts: {number, title, state, merged, merged_to_master,
-                                author_login, html_url, created_at}.
+        Filters by created_at in [start, finish] client-side. Results sorted newest-first,
+        so we stop as soon as created_at drops below start. No per-PR follow-up call needed.
+        Uses REST rate limit (5000/hr) instead of Search rate limit (30/min).
+        Also pre-populates _pr_details_cache so _audit_story() gets cache hits.
         """
-        if not start or not finish:
-            return []
-        owner_repo = owner_repo.strip()
+        owner, repo = owner_repo.split("/", 1)
+        start_dt, finish_dt = start[:10], finish[:10]
         results = []
         page = 1
-        while True:
+        while page <= 20:  # safety cap: >2000 PRs in a 2-week sprint is implausible
             try:
-                resp = self.session.get(
-                    "https://api.github.com/search/issues",
+                resp = self._gh_get(
+                    f"https://api.github.com/repos/{owner}/{repo}/pulls",
                     params={
-                        "q": f"repo:{owner_repo} is:pr created:{start[:10]}..{finish[:10]}",
+                        "state": "all",
+                        "sort": "created",
+                        "direction": "desc",
                         "per_page": 100,
                         "page": page,
                     },
                     timeout=20,
                 )
-                if not resp.ok:
-                    print(f"  [GitHub] PR search failed: {resp.status_code} {resp.text[:120]}")
-                    break
-                data = resp.json()
-                items = data.get("items", [])
-                if not items:
-                    break
-                for item in items:
-                    pr_url = item.get("pull_request", {}).get("html_url") or item.get("html_url", "")
-                    merged_at = item.get("pull_request", {}).get("merged_at")
-                    merged = bool(merged_at)
-                    # Determine base branch by fetching individual PR (needed for merge target)
-                    base_ref = ""
-                    if pr_url:
-                        details = self.get_pr_details(pr_url)
-                        if details:
-                            base_ref = details.get("base_ref", "")
-                            merged = details.get("merged", merged)
-                    label_names = [lbl.get("name", "") for lbl in (item.get("labels") or [])]
-                    ai_labeled = any(_AI_LABEL_RE.search(lbl) for lbl in label_names)
-                    results.append({
-                        "number": item.get("number"),
-                        "title": item.get("title", ""),
-                        "state": item.get("state", ""),
-                        "merged": merged,
-                        "base_ref": base_ref,
-                        "merged_to_master": merged and base_ref in ("main", "master"),
-                        "author_login": (item.get("user") or {}).get("login", ""),
-                        "html_url": pr_url,
-                        "created_at": item.get("created_at", ""),
-                        "ai_labeled": ai_labeled,
-                        "labels": label_names,
-                    })
-                if len(items) < 100:
-                    break
-                page += 1
             except requests.RequestException as exc:
-                print(f"  [GitHub] PR search error: {exc}")
+                print(f"  [GitHub] PR list error for {owner_repo}: {exc}")
                 break
+            if not resp.ok:
+                print(f"  [GitHub] PR list failed for {owner_repo}: {resp.status_code} {resp.text[:120]}")
+                break
+            items = resp.json()
+            if not items:
+                break
+            done = False
+            for pr in items:
+                created = (pr.get("created_at") or "")[:10]
+                if created > finish_dt:
+                    continue  # newer than window; keep paging
+                if created < start_dt:
+                    done = True  # sorted desc — everything after is older
+                    break
+                merged_at = pr.get("merged_at")
+                merged = bool(merged_at)
+                base_ref = (pr.get("base") or {}).get("ref", "")
+                pr_url = pr.get("html_url", "")
+                entry = {
+                    "number": pr.get("number"),
+                    "title": pr.get("title", ""),
+                    "state": pr.get("state", ""),
+                    "merged": merged,
+                    "base_ref": base_ref,
+                    "merged_to_master": merged and base_ref in ("main", "master"),
+                    "author_login": (pr.get("user") or {}).get("login", ""),
+                    "html_url": pr_url,
+                }
+                if pr_url:
+                    # Warm the details cache so _audit_story() avoids redundant API calls
+                    self._pr_details_cache[pr_url] = entry
+                label_names = [lbl.get("name", "") for lbl in (pr.get("labels") or [])]
+                ai_labeled = any(_AI_LABEL_RE.search(lbl) for lbl in label_names)
+                results.append({
+                    **entry,
+                    "created_at": pr.get("created_at", ""),
+                    "ai_labeled": ai_labeled,
+                    "labels": label_names,
+                })
+            if done or len(items) < 100:
+                break
+            page += 1
         return results
+
+    def get_prs_for_sprint(self, owner_repo: str, start: str, finish: str) -> list[dict]:
+        """Fetch all PRs from owner_repo whose created_at falls within [start, finish].
+
+        Uses REST list endpoint (base.ref included natively — no N+1 per result).
+        Returns list of dicts: {number, title, state, merged, merged_to_master,
+                                author_login, html_url, created_at, ai_labeled, labels}.
+        """
+        if not start or not finish:
+            return []
+        return self._get_prs_via_list(owner_repo.strip(), start, finish)
 
     def has_approved_review(self, raw_url: str) -> bool:
         if raw_url in self._review_cache:
@@ -206,7 +239,7 @@ class GitHubClient:
 
         owner, repo, pr_num = m.group(1), m.group(2), m.group(3)
         try:
-            resp = self.session.get(
+            resp = self._gh_get(
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_num}/reviews",
                 timeout=15,
             )

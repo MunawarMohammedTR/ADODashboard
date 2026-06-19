@@ -11,6 +11,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .header h1{font-size:22px;font-weight:700;letter-spacing:.3px}
 .header .meta{font-size:12px;opacity:.8;margin-top:4px}
 .header .badge{background:rgba(255,255,255,.15);border-radius:20px;padding:4px 12px;font-size:12px}
+.refresh-btn{background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.5);color:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit}
+.refresh-btn:hover:not(:disabled){background:rgba(255,255,255,.28)}
+.refresh-btn:disabled{opacity:.55;cursor:not-allowed}
 .container{max-width:1400px;margin:0 auto;padding:24px 32px}
 .team-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:24px}
 .team-tab{padding:8px 18px;border:2px solid #1a237e;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;background:#fff;color:#1a237e;transition:all .2s}
@@ -149,6 +152,23 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
 .pr-pct-amber{color:#b45309;font-weight:700}
 .pr-pct-red{color:#c62828;font-weight:700}
 .pr-no-data{text-align:center;padding:40px;color:#888;font-size:15px}
+.ai-count-btn{background:#e8f5e9;color:#2e7d32;font-weight:700;padding:2px 8px;border-radius:10px;font-size:12px;cursor:pointer;border:none;font-family:inherit}
+.ai-count-btn:hover{background:#c8e6c9}
+/* AI PR list modal */
+.ai-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center}
+.ai-modal-overlay.open{display:flex}
+.ai-modal{background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.22);width:600px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column}
+.ai-modal-header{background:#1a237e;color:#fff;padding:14px 20px;border-radius:12px 12px 0 0;display:flex;align-items:center;justify-content:space-between}
+.ai-modal-header h3{font-size:14px;font-weight:700;margin:0}
+.ai-modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;opacity:.8}
+.ai-modal-close:hover{opacity:1}
+.ai-modal-body{overflow-y:auto;padding:16px 20px}
+.ai-pr-table{width:100%;border-collapse:collapse;font-size:13px}
+.ai-pr-table th{background:#e8eaf6;color:#1a237e;padding:8px 12px;text-align:left;font-weight:600;white-space:nowrap}
+.ai-pr-table td{padding:8px 12px;border-bottom:1px solid #e8eaf6;vertical-align:middle}
+.ai-pr-table tr:hover td{background:#f5f7ff}
+.ai-pr-link{color:#0d47a1;text-decoration:none;font-weight:600}
+.ai-pr-link:hover{text-decoration:underline}
 
 /* Feature cards */
 .feature-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px}
@@ -194,8 +214,13 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
     </div>
     <div class="meta">Generated {{ generated_at }}</div>
   </div>
-  <div style="text-align:right;font-size:12px;opacity:.8">
-    {{ teams | length }} team(s) &nbsp;|&nbsp; {{ sprint_count }} sprint(s) per team
+  <div style="display:flex;align-items:center;gap:16px">
+    <div style="text-align:right;font-size:12px;opacity:.8">
+      {{ teams | length }} team(s) &nbsp;|&nbsp; {{ sprint_count }} sprint(s) per team
+    </div>
+    {% if serve_mode %}
+    <button class="refresh-btn" id="refresh-btn" onclick="refreshDashboard()">&#8635; Refresh Data</button>
+    {% endif %}
   </div>
 </div>
 
@@ -901,9 +926,22 @@ function buildPRView(teamId, sprintId) {
   var prByIndividual = sprintData ? (sprintData.prByIndividual || {}) : {};
   var sprintName = sprintData ? sprintData.name : '';
 
-  var rows = Object.keys(prByIndividual).map(function(author) {
-    return { author: author, data: prByIndividual[author] };
+  // Collect the ADO assignees for this sprint to filter PR rows
+  var sprintAssignees = {};
+  (sprintData ? (sprintData.stories || []) : []).forEach(function(s) {
+    if (s.assignedTo && s.assignedTo !== 'Unassigned') sprintAssignees[s.assignedTo] = true;
   });
+  var hasAssigneeMap = Object.keys(sprintAssignees).length > 0;
+
+  var rows = Object.keys(prByIndividual)
+    .filter(function(author) {
+      if (!hasAssigneeMap) return true;
+      var adoName = prByIndividual[author].assigned_to || '';
+      return adoName !== '' && sprintAssignees[adoName] === true;
+    })
+    .map(function(author) {
+      return { author: author, data: prByIndividual[author] };
+    });
   rows.sort(function(a, b) { return b.data.prs_raised - a.data.prs_raised; });
 
   if (!rows.length) {
@@ -925,8 +963,9 @@ function buildPRView(teamId, sprintId) {
     var pct = d.pct_deployed;
     var pctClass = pct >= 80 ? 'pr-pct-green' : (pct >= 50 ? 'pr-pct-amber' : 'pr-pct-red');
     var aiCount = d.ai_labeled || 0;
+    var aiPrs = d.ai_labeled_prs || [];
     var aiCell = aiCount > 0
-      ? '<span style="background:#e8f5e9;color:#2e7d32;font-weight:700;padding:2px 8px;border-radius:10px;font-size:12px">&#129302; ' + aiCount + '</span>'
+      ? '<button class="ai-count-btn" onclick=\'openAiPrModal(' + JSON.stringify(r.author) + ',' + JSON.stringify(aiPrs) + ')\'>&#129302; ' + aiCount + '</button>'
       : '<span style="color:#bbb">0</span>';
     html += '<tr>'
       + '<td>' + escHtml(r.author) + '</td>'
@@ -1068,6 +1107,101 @@ window.addEventListener('load', function() {
     sel.selectedIndex = sel.options.length - 1;
   });
 });
+
+// ── AI-labeled PR modal ─────────────────────────────────────────────────────
+function openAiPrModal(author, prs) {
+  var overlay = document.getElementById('ai-modal-overlay');
+  var title   = document.getElementById('ai-modal-title');
+  var body    = document.getElementById('ai-modal-body');
+
+  title.textContent = '\u{1F916} AI-Labeled PRs — ' + author;
+
+  if (!prs || !prs.length) {
+    body.innerHTML = '<p style="color:#888;padding:8px 0">No AI-labeled PRs found.</p>';
+  } else {
+    var rows = prs.map(function(p) {
+      var repoCell = escHtml(p.repo || '—');
+      var prNum = p.number ? '#' + p.number : '—';
+      var linkCell = p.html_url
+        ? '<a class="ai-pr-link" href="' + escHtml(p.html_url) + '" target="_blank" rel="noopener">' + prNum + ' &#8599;</a>'
+        : prNum;
+      return '<tr><td>' + repoCell + '</td><td>' + linkCell + '</td></tr>';
+    }).join('');
+    body.innerHTML = '<table class="ai-pr-table"><thead><tr><th>Repository</th><th>Pull Request</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  overlay.classList.add('open');
+}
+
+function closeAiPrModal() {
+  document.getElementById('ai-modal-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAiPrModal();
+});
+
+{% if serve_mode %}
+// ── Live Refresh ────────────────────────────────────────────────────────────
+var _refreshPollTimer = null;
+
+function refreshDashboard() {
+  var btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+
+  fetch('/refresh', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.started || d.reason === 'already running') {
+        _pollRefreshStatus();
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Refresh Data';
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Network error — try again';
+    });
+}
+
+function _pollRefreshStatus() {
+  var btn = document.getElementById('refresh-btn');
+  var dots = 0;
+  function tick() {
+    dots = (dots % 3) + 1;
+    btn.textContent = 'Fetching' + '.'.repeat(dots);
+    fetch('/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) {
+          btn.disabled = false;
+          btn.textContent = 'Error — try again';
+        } else if (!d.refreshing) {
+          window.location.reload();
+        } else {
+          _refreshPollTimer = setTimeout(tick, 3000);
+        }
+      })
+      .catch(function() {
+        _refreshPollTimer = setTimeout(tick, 5000);
+      });
+  }
+  tick();
+}
+{% endif %}
 </script>
+
+<!-- AI-labeled PR modal -->
+<div class="ai-modal-overlay" id="ai-modal-overlay" onclick="if(event.target===this)closeAiPrModal()">
+  <div class="ai-modal">
+    <div class="ai-modal-header">
+      <h3 id="ai-modal-title"></h3>
+      <button class="ai-modal-close" onclick="closeAiPrModal()">&times;</button>
+    </div>
+    <div class="ai-modal-body" id="ai-modal-body"></div>
+  </div>
+</div>
 </body>
 </html>
