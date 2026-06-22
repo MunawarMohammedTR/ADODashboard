@@ -88,6 +88,8 @@ def generate_report(data: dict, output_dir: str = ".", serve_mode: bool = False)
             "labels": [s["name"] for s in sprints_chron],
             "total": [s["data"]["total"] for s in sprints_chron],
             "completed": [s["data"]["completed"] for s in sprints_chron],
+            "points_total": [s["data"]["total_points"] or 0 for s in sprints_chron],
+            "points_done": [s["data"]["completed_points"] or 0 for s in sprints_chron],
         }
 
     html = template.render(

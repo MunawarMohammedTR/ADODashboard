@@ -420,6 +420,12 @@ td.title-col{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:
       <canvas id="chart-{{ team.id }}"></canvas>
     </div>
 
+    <!-- Velocity trend line chart -->
+    <div class="chart-wrapper">
+      <h3>Velocity Trend (Story Points) — {{ team.name }}</h3>
+      <canvas id="velocity-chart-{{ team.id }}"></canvas>
+    </div>
+
     </div>{# end sprint-view #}
 
     <!-- ══════════ FEATURE VIEW ══════════ -->
@@ -900,6 +906,147 @@ function drawBarChart(canvasId, labels, completedData, totalData, compact) {
   ctx.fillText('Completed', lx+78, ly+9);
 }
 
+// ── Velocity trend line chart ─────────────────────────────────────────────
+function drawVelocityChart(canvasId, labels, pointsDone, pointsTotal) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.offsetWidth || 1000;
+  var H = 340;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  var n = labels.length;
+  if (!n) return;
+
+  var padL = 52, padR = 24, padT = 32, padB = 80;
+  var chartW = W - padL - padR;
+  var chartH = H - padT - padB;
+
+  var allVals = pointsDone.concat(pointsTotal).filter(function(v){ return v > 0; });
+  var maxVal = allVals.length ? Math.max.apply(null, allVals) : 1;
+  // Round up to a nice grid ceiling
+  var step = Math.pow(10, Math.floor(Math.log(maxVal) / Math.log(10)));
+  var gridMax = Math.ceil(maxVal / step) * step;
+  var gridLines = 5;
+
+  // Grid
+  ctx.strokeStyle = '#e8eaf6'; ctx.lineWidth = 1;
+  for (var i = 0; i <= gridLines; i++) {
+    var val = gridMax * i / gridLines;
+    var y = padT + chartH - (val / gridMax) * chartH;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(val), padL - 6, y + 4);
+  }
+
+  // Y-axis label
+  ctx.save();
+  ctx.fillStyle = '#666'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.translate(12, padT + chartH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Story Points', 0, 0);
+  ctx.restore();
+
+  function xPos(i) { return padL + (n === 1 ? chartW / 2 : i * chartW / (n - 1)); }
+  function yPos(v) { return padT + chartH - (v / gridMax) * chartH; }
+
+  // 3-sprint rolling average of points done
+  var rolling = pointsDone.map(function(_, i) {
+    var slice = pointsDone.slice(Math.max(0, i - 2), i + 1);
+    return slice.reduce(function(a, v) { return a + v; }, 0) / slice.length;
+  });
+
+  // Draw filled area under pointsDone line
+  ctx.beginPath();
+  ctx.moveTo(xPos(0), padT + chartH);
+  for (var i2 = 0; i2 < n; i2++) ctx.lineTo(xPos(i2), yPos(pointsDone[i2]));
+  ctx.lineTo(xPos(n - 1), padT + chartH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(26,35,126,0.07)';
+  ctx.fill();
+
+  // Draw pointsTotal line (dashed, light)
+  ctx.beginPath();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = '#9fa8da'; ctx.lineWidth = 1.5;
+  for (var i3 = 0; i3 < n; i3++) {
+    if (i3 === 0) ctx.moveTo(xPos(i3), yPos(pointsTotal[i3]));
+    else ctx.lineTo(xPos(i3), yPos(pointsTotal[i3]));
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw pointsDone line (solid, dark blue)
+  ctx.beginPath();
+  ctx.strokeStyle = '#1a237e'; ctx.lineWidth = 2.5;
+  for (var i4 = 0; i4 < n; i4++) {
+    if (i4 === 0) ctx.moveTo(xPos(i4), yPos(pointsDone[i4]));
+    else ctx.lineTo(xPos(i4), yPos(pointsDone[i4]));
+  }
+  ctx.stroke();
+
+  // Draw rolling average line (orange dashed)
+  ctx.beginPath();
+  ctx.setLineDash([6, 3]);
+  ctx.strokeStyle = '#e65100'; ctx.lineWidth = 2;
+  for (var i5 = 0; i5 < n; i5++) {
+    if (i5 === 0) ctx.moveTo(xPos(i5), yPos(rolling[i5]));
+    else ctx.lineTo(xPos(i5), yPos(rolling[i5]));
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Dots + value labels on pointsDone line
+  for (var i6 = 0; i6 < n; i6++) {
+    var cx2 = xPos(i6), cy2 = yPos(pointsDone[i6]);
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a237e'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    if (pointsDone[i6] > 0) {
+      ctx.fillStyle = '#1a237e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(pointsDone[i6], cx2, cy2 - 9);
+    }
+  }
+
+  // X-axis labels (angled)
+  for (var i7 = 0; i7 < n; i7++) {
+    var m = labels[i7].match(/S\d+/);
+    var lbl = m ? m[0] : (labels[i7].length > 8 ? labels[i7].slice(-8) : labels[i7]);
+    ctx.save();
+    ctx.fillStyle = '#444'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.translate(xPos(i7) + 4, padT + chartH + 10);
+    ctx.rotate(-Math.PI / 4);
+    ctx.fillText(lbl, 0, 0);
+    ctx.restore();
+  }
+
+  // Legend
+  var lx = W - padR - 290, ly = padT + 2;
+  ctx.fillStyle = '#1a237e'; ctx.fillRect(lx, ly, 18, 3);
+  ctx.beginPath(); ctx.arc(lx + 9, ly + 1.5, 4, 0, Math.PI * 2); ctx.fillStyle = '#1a237e'; ctx.fill();
+  ctx.fillStyle = '#444'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('Points Done', lx + 26, ly + 5);
+
+  lx += 110;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = '#9fa8da'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(lx, ly + 2); ctx.lineTo(lx + 18, ly + 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+  ctx.fillText('Points Total', lx + 24, ly + 5);
+
+  lx += 108;
+  ctx.setLineDash([6, 3]);
+  ctx.strokeStyle = '#e65100'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(lx, ly + 2); ctx.lineTo(lx + 18, ly + 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#444'; ctx.textAlign = 'left';
+  ctx.fillText('3-Sprint Avg', lx + 24, ly + 5);
+}
+
 // ── Feature View ──────────────────────────────────────────────────────────
 var featureData = {{ feature_data | tojson }};
 
@@ -1099,6 +1246,7 @@ window.addEventListener('load', function() {
   Object.keys(chartData).forEach(function(teamId) {
     var d = chartData[teamId];
     drawBarChart('chart-' + teamId, d.labels, d.completed, d.total, false);
+    drawVelocityChart('velocity-chart-' + teamId, d.labels, d.points_done, d.points_total);
   });
   // Pre-select last sprint in PR View dropdowns
   Object.keys(teamStoryData).forEach(function(teamId) {
