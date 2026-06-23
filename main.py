@@ -606,6 +606,13 @@ def _process_team(
     }
 
 
+def _process_team_json(team: dict, ado: "AzureDevOpsClient", gh: "GitHubClient") -> "dict | None":
+    sprint_count = int(os.environ.get("SPRINT_COUNT", "3"))
+    start_sprint = os.environ.get("START_SPRINT", "").strip()
+    include_backlog = os.environ.get("INCLUDE_BACKLOG", "false").lower() == "true"
+    return _process_team(team, ado, gh, sprint_count, start_sprint, include_backlog)
+
+
 def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient) -> dict:
     sprint_count = int(os.environ.get("SPRINT_COUNT", "3"))
     start_sprint = os.environ.get("START_SPRINT", "").strip()
@@ -694,6 +701,28 @@ def _run_serve_mode(ado: "AzureDevOpsClient", gh: "GitHubClient", port: int = 80
                         "error": _state["error"],
                     }
                 _json_response(self, 200, payload)
+            elif self.path == "/teams":
+                _json_response(self, 200, ado.get_all_teams())
+            elif self.path.startswith("/team-panel/"):
+                from report_generator import _render_team_panel_fragment
+                team_id = self.path[len("/team-panel/"):]
+                all_teams = ado.get_all_teams()
+                matched = next((t for t in all_teams if t["id"] == team_id), None)
+                if not matched:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                result = _process_team_json(matched, ado, gh)
+                if result is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = _render_team_panel_fragment(result, serve_mode=True).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self.send_response(404)
                 self.end_headers()

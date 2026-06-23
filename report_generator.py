@@ -76,6 +76,30 @@ def _build_story_data(teams: list[dict]) -> dict:
     return out
 
 
+def _render_team_panel_fragment(team_data: dict, serve_mode: bool = False) -> str:
+    """Render a single team panel HTML fragment for on-demand injection in serve mode."""
+    template_dir = Path(__file__).parent / "templates"
+    env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
+    template = env.get_template("team_panel.html.j2")
+
+    sprints_chron = [s for s in team_data["sprints"] if not s.get("is_backlog")]
+    chart_data = {team_data["id"]: {
+        "labels": [s["name"] for s in sprints_chron],
+        "total": [s["data"]["total"] for s in sprints_chron],
+        "completed": [s["data"]["completed"] for s in sprints_chron],
+        "points_total": [s["data"]["total_points"] or 0 for s in sprints_chron],
+        "points_done": [s["data"]["completed_points"] or 0 for s in sprints_chron],
+    }}
+
+    return template.render(
+        team=team_data,
+        serve_mode=serve_mode,
+        story_data=_build_story_data([team_data]),
+        feature_data=_build_feature_js_data([team_data]),
+        chart_data=chart_data,
+    )
+
+
 def generate_report(data: dict, output_dir: str = ".", serve_mode: bool = False) -> tuple[str, str]:
     template_dir = Path(__file__).parent / "templates"
     env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)

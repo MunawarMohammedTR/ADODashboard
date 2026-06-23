@@ -1,0 +1,264 @@
+<div class="team-panel" id="team-{{ team.id }}">
+
+    <!-- View toggle: Sprint / Feature / PR -->
+    <div class="view-toggle">
+      <div class="view-btn active" id="vbtn-sprint-{{ team.id }}" onclick="toggleView('{{ team.id }}','sprint')">Sprint View</div>
+      <div class="view-btn" id="vbtn-feature-{{ team.id }}" onclick="toggleView('{{ team.id }}','feature')">Feature View</div>
+      <div class="view-btn" id="vbtn-pr-{{ team.id }}" onclick="toggleView('{{ team.id }}','pr')">PR View</div>
+    </div>
+
+    <!-- ══════════ SPRINT VIEW ══════════ -->
+    <div class="view-panel active" id="sprint-view-{{ team.id }}">
+
+    <!-- Assigned To filter -->
+    <div class="af-bar">
+      <span class="af-label">Assigned To:</span>
+      <select class="assignee-select" id="af-{{ team.id }}" onchange="onAssigneeChange('{{ team.id }}', this.value)">
+        <option value="">All</option>
+      </select>
+    </div>
+
+    <!-- Tag filter -->
+    <div class="tag-bar">
+      <span class="tag-label">Tags:</span>
+      <select class="tag-select" id="tag-select-{{ team.id }}" onchange="applyTagFilter('{{ team.id }}', this.value)">
+        <option value="">All Tags</option>
+      </select>
+    </div>
+
+    <!-- Person cross-sprint summary (shown when a person pill is active) -->
+    <div class="person-summary" id="ps-{{ team.id }}" style="display:none">
+      <div class="person-summary-header">
+        <h3 id="ps-title-{{ team.id }}"></h3>
+        <span class="close-btn" onclick="clearAssigneeFilter('{{ team.id }}')">&#10005;</span>
+      </div>
+      <div class="person-summary-body">
+        <div class="person-sprint-table-wrap">
+          <table class="person-sprint-table">
+            <thead>
+              <tr>
+                <th>Sprint</th>
+                <th class="num">Assigned</th>
+                <th class="num">Completed</th>
+                <th class="num">Points Done</th>
+                <th class="pct-cell">Completion</th>
+              </tr>
+            </thead>
+            <tbody id="ps-tbody-{{ team.id }}"></tbody>
+          </table>
+        </div>
+        <div class="person-chart-wrap">
+          <canvas class="person-canvas" id="ps-chart-{{ team.id }}"></canvas>
+        </div>
+      </div>
+      <!-- All completed items for this person across all sprints -->
+      <div class="ps-completed-section">
+        <h4 id="ps-completed-title-{{ team.id }}">All Completed Items</h4>
+        <div class="ps-completed-wrap" id="ps-completed-{{ team.id }}"></div>
+      </div>
+    </div>
+
+    <!-- Sprint selector -->
+    <div class="sprint-bar">
+      <label>Sprint:</label>
+      <select class="sprint-select" onchange="switchSprint('{{ team.id }}', this.value)">
+        {% for sprint in team.sprints %}
+        {% set hl = sprint.data.health_label %}
+        <option value="{{ sprint.id }}">{{ sprint.name }} {% if hl == 'green' %}✔{% elif hl == 'amber' %}⚠{% else %}✘{% endif %} {{ sprint.data.health_score }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% for sprint in team.sprints %}
+    {% set sdata = sprint.data %}
+    <div class="sprint-summary-panel{% if loop.first %} active{% endif %}" id="sprint-{{ team.id }}-{{ sprint.id }}">
+
+      <!-- Sprint health banner -->
+      {% set hl = sdata.health_label %}
+      <div class="sprint-health-bar {{ hl }}">
+        <span class="health-dot health-dot-{{ hl }}"></span>
+        Sprint Health Score: <strong>{{ sdata.health_score }} / 100</strong>
+        &nbsp;—&nbsp;
+        {% if hl == 'green' %}Healthy sprint
+        {% elif hl == 'amber' %}Needs attention
+        {% else %}At risk
+        {% endif %}
+        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:.8">
+          Completion {{ sdata.completed }}/{{ sdata.total }} &nbsp;|&nbsp; Audit {{ sdata.audit_pass_rate }}%
+        </span>
+      </div>
+
+      <!-- Summary cards (static; updated by JS when filtered) -->
+      <div class="cards" id="cards-{{ team.id }}-{{ sprint.id }}">
+        <div class="card">
+          <div class="value" id="c-total-{{ team.id }}-{{ sprint.id }}">{{ sdata.total }}</div>
+          <div class="label">Work Items</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-done-{{ team.id }}-{{ sprint.id }}">{{ sdata.completed }}</div>
+          <div class="label">Completed</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-pts-{{ team.id }}-{{ sprint.id }}">{{ sdata.total_points }}</div>
+          <div class="label">Story Points</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-donepts-{{ team.id }}-{{ sprint.id }}">{{ sdata.completed_points }}</div>
+          <div class="label">Points Done</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-rate-{{ team.id }}-{{ sprint.id }}">{{ sdata.audit_pass_rate }}%</div>
+          <div class="label">Audit Pass Rate</div>
+        </div>
+        <div class="card health-{{ sdata.health_label }}">
+          <div class="value">{{ sdata.health_score }}</div>
+          <div class="label">Health Score</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-devdays-{{ team.id }}-{{ sprint.id }}">{{ sdata.avg_dev_days if sdata.avg_dev_days is not none else '—' }}</div>
+          <div class="label">Avg Dev Days</div>
+        </div>
+        <div class="card">
+          <div class="value" id="c-qadays-{{ team.id }}-{{ sprint.id }}">{{ sdata.avg_qa_days if sdata.avg_qa_days is not none else '—' }}</div>
+          <div class="label">Avg QA Days</div>
+        </div>
+      </div>
+
+      <!-- Filter note -->
+      <div class="filter-note" id="fn-{{ team.id }}-{{ sprint.id }}" style="display:none;margin-bottom:12px;padding:6px 14px;background:#e8eaf6;border-radius:6px;font-size:12px;color:#1a237e"></div>
+
+      <!-- Audit table -->
+      {% if sdata.stories %}
+      <div class="table-wrapper">
+        <table id="tbl-{{ team.id }}-{{ sprint.id }}">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>State</th>
+              <th>Assigned To</th>
+              <th style="text-align:right">Points</th>
+              <th title="Acceptance Criteria filled">AC</th>
+              <th title="At least one GitHub PR linked">PR</th>
+              <th title="At least one commit linked">Commits</th>
+              <th title="GitHub PR has an approved review">Reviewed</th>
+              <th title="Calendar days in 'In Development' state" style="text-align:right">Dev Days</th>
+              <th title="Calendar days in 'QA' state" style="text-align:right">QA Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in sdata.stories %}
+            <tr data-assignee="{{ s.assigned_to | e }}" data-tags="{{ s.tags | join(';') }}">
+              <td class="id-col"><a href="{{ s.ado_url }}" target="_blank">#{{ s.id }}</a></td>
+              <td class="title-col" title="{{ s.title }}">
+                {% if s.work_item_type == 'Bug' %}
+                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="Bug"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>
+                {% else %}
+                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="User Story"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>
+                {% endif %}{{ s.title }}</td>
+              <td><span class="state-badge state-{{ s.state | replace(' ', '\\ ') }}">{{ s.state }}</span></td>
+              <td class="assigned-col" title="{{ s.assigned_to }}">{{ s.assigned_to }}</td>
+              <td class="points-col">{{ s.story_points if s.story_points else '—' }}</td>
+              <td class="audit">{% if s.has_ac %}<span class="pass" title="AC present">✔</span>{% else %}<span class="fail" title="Missing AC">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.has_pr %}<span class="pass" title="PR linked">✔</span>{% else %}<span class="fail" title="No PR linked">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.has_commit %}<span class="pass" title="Commit linked">✔</span>{% else %}<span class="fail" title="No commit">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.pr_reviewed %}<span class="pass" title="Approved review">✔</span>{% elif not s.has_pr %}<span style="color:#bbb" title="No PR">—</span>{% else %}<span class="fail" title="No approved review">✘</span>{% endif %}</td>
+              <td class="effort-col">{% if s.dev_days is not none %}{{ s.dev_days }}{% if s.dev_wip %}<span class="wip-star" title="Still in development">*</span>{% endif %}{% else %}—{% endif %}</td>
+              <td class="effort-col">{% if s.qa_days is not none %}{{ s.qa_days }}{% if s.qa_wip %}<span class="wip-star" title="Still in QA">*</span>{% endif %}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="no-visible-rows" id="nvr-{{ team.id }}-{{ sprint.id }}">No stories assigned to this person in this sprint.</div>
+      </div>
+      {% else %}
+      <div class="no-data">No work items found in this sprint.</div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+
+    <!-- Sprint-over-sprint bar chart -->
+    <div class="chart-wrapper">
+      <h3>Sprint Progress — {{ team.name }}</h3>
+      <canvas id="chart-{{ team.id }}"></canvas>
+    </div>
+
+    <!-- Velocity trend line chart -->
+    <div class="chart-wrapper">
+      <h3>Velocity Trend (Story Points) — {{ team.name }}</h3>
+      <canvas id="velocity-chart-{{ team.id }}"></canvas>
+    </div>
+
+    </div>{# end sprint-view #}
+
+    <!-- ══════════ FEATURE VIEW ══════════ -->
+    <div class="view-panel" id="feature-view-{{ team.id }}">
+
+      <!-- Feature cards -->
+      <div class="feature-cards-grid" id="fcards-{{ team.id }}">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Feature detail panel (shown on card click) -->
+      <div class="feature-detail" id="fdetail-{{ team.id }}">
+        <div class="fd-header">
+          <h3 id="fd-title-{{ team.id }}"></h3>
+          <span class="fd-close" onclick="closeFeatureDetail('{{ team.id }}')">&#10005;</span>
+        </div>
+        <div class="fd-body">
+          <div class="fd-chart-wrap">
+            <canvas id="fd-chart-{{ team.id }}" style="max-height:180px"></canvas>
+          </div>
+          <div class="fd-roadblocks" id="fd-roadblocks-{{ team.id }}"></div>
+        </div>
+        <div class="fd-section-header">Work Items</div>
+        <div class="fd-table-wrap" style="padding:0 20px 20px">
+          <table class="fd-table">
+            <thead>
+              <tr>
+                <th>Sprint</th><th>Title</th><th>State</th>
+                <th>Assigned To</th><th class="num">Points</th>
+              </tr>
+            </thead>
+            <tbody id="fd-tbody-{{ team.id }}"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>{# end feature-view #}
+
+    <!-- ══════════ PR VIEW ══════════ -->
+    <div class="view-panel" id="pr-view-{{ team.id }}">
+
+      <!-- Sprint selector for PR view -->
+      <div class="pr-sprint-bar">
+        <label>Sprint:</label>
+        <select class="pr-sprint-sel" id="pr-sprint-sel-{{ team.id }}" onchange="buildPRView('{{ team.id }}', this.value)">
+          {% for sprint in team.sprints %}
+          {% if not sprint.is_backlog %}
+          <option value="{{ sprint.id }}">{{ sprint.name }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- PR table populated by JS -->
+      <div class="pr-table-wrap" id="pr-table-wrap-{{ team.id }}">
+        <div class="pr-no-data">Select a sprint to view PR statistics.</div>
+      </div>
+
+    </div>{# end pr-view #}
+
+  </div>
+<script>
+(function(){
+  var sd = {{ story_data | tojson }};
+  var fd = {{ feature_data | tojson }};
+  var cd = {{ chart_data | tojson }};
+  var tid = {{ team.id | tojson }};
+  teamStoryData[tid] = sd[tid];
+  featureData[tid] = fd[tid];
+  chartData[tid] = cd[tid];
+})();
+</script>

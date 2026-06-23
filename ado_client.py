@@ -116,7 +116,8 @@ class AzureDevOpsClient:
                     raise
                 time.sleep(2 ** attempt)
 
-    def get_teams(self) -> list[dict]:
+    def _fetch_all_teams_raw(self) -> list[dict]:
+        """Fetch all teams from ADO without applying TEAMS_FILTER."""
         url = f"{self.base}/_apis/projects/{self.project}/teams"
         teams = []
         skip = 0
@@ -128,6 +129,14 @@ class AzureDevOpsClient:
             if len(batch) < page:
                 break
             skip += page
+        return teams
+
+    def get_all_teams(self) -> list[dict]:
+        """Return all teams in the project, bypassing TEAMS_FILTER."""
+        return [{"id": t["id"], "name": t["name"]} for t in self._fetch_all_teams_raw()]
+
+    def get_teams(self) -> list[dict]:
+        teams = self._fetch_all_teams_raw()
 
         teams_filter_raw = os.environ.get("TEAMS_FILTER", "").strip()
         if teams_filter_raw:
