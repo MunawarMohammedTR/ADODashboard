@@ -1102,18 +1102,21 @@ function buildPRView(teamId, sprintId) {
   var prByIndividual = sprintData ? (sprintData.prByIndividual || {}) : {};
   var sprintName = sprintData ? sprintData.name : '';
 
-  // Collect the ADO assignees for this sprint to filter PR rows
-  var sprintAssignees = {};
-  (sprintData ? (sprintData.stories || []) : []).forEach(function(s) {
-    if (s.assignedTo && s.assignedTo !== 'Unassigned') sprintAssignees[s.assignedTo] = true;
+  // Build the full ADO assignee set for this team across all sprints
+  var teamAssignees = {};
+  Object.keys(teamStoryData[teamId] || {}).forEach(function(sid) {
+    ((teamStoryData[teamId][sid] || {}).stories || []).forEach(function(s) {
+      if (s.assignedTo && s.assignedTo !== 'Unassigned') teamAssignees[s.assignedTo] = true;
+    });
   });
-  var hasAssigneeMap = Object.keys(sprintAssignees).length > 0;
+  var hasTeamMap = Object.keys(teamAssignees).length > 0;
 
   var rows = Object.keys(prByIndividual)
     .filter(function(author) {
-      if (!hasAssigneeMap) return true;
+      if (!hasTeamMap) return true;
       var adoName = prByIndividual[author].assigned_to || '';
-      return adoName !== '' && sprintAssignees[adoName] === true;
+      // Only show if mapped to this team's ADO members; hide if unmapped or another team
+      return adoName !== '' && teamAssignees[adoName] === true;
     })
     .map(function(author) {
       return { author: author, data: prByIndividual[author] };

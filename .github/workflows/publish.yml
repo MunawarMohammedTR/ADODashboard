@@ -7,11 +7,10 @@ on:
 
 permissions:
   contents: read
-  pages: write
   id-token: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,31 +39,35 @@ jobs:
           python main.py
           mv site/ado_report_*.html site/index.html
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./site
+      # Stamp the real tenant ID into staticwebapp.config.json before deploy.
+      # The placeholder AZURE_TENANT_ID in the openIdIssuer URL must be replaced
+      # with the actual tenant GUID so Azure SWA can resolve the OIDC metadata endpoint.
+      - name: Patch staticwebapp.config.json with tenant ID
+        env:
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+        run: |
+          sed -i "s/AZURE_TENANT_ID/${AZURE_TENANT_ID}/g" staticwebapp.config.json
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: ./site
+          skip_app_build: true
+          config_file_location: .
 
   notify:
-    needs: deploy
+    needs: build-and-deploy
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Post Teams notification
         env:
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
-          DEPLOY_STATUS: ${{ needs.deploy.result }}
-          PAGES_URL: https://munawarmohammedtr.github.io/ADODashboard/
+          DEPLOY_STATUS: ${{ needs.build-and-deploy.result }}
+          PAGES_URL: ${{ vars.AZURE_SWA_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ "$DEPLOY_STATUS" = "success" ]; then
