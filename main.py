@@ -53,7 +53,8 @@ def _assigned_to_display(raw: str | None) -> str:
     if not raw:
         return "Unassigned"
     m = re.match(r"^(.*?)\s*<", raw)
-    return m.group(1).strip() if m else raw
+    result = m.group(1) if m else raw
+    return " ".join(result.split())
 
 
 def _assigned_to_name(raw) -> str:
@@ -313,7 +314,7 @@ def _sprint_summary(stories: list[dict]) -> dict:
                 seen_prs.add(key)
                 author = s.get("assigned_to") or "Unknown"
                 if author not in pr_by_individual:
-                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": []}
+                    pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": [], "assigned_to": author}
                 pr_by_individual[author]["prs_raised"] += 1
                 pr_by_individual[author]["not_merged"] += 1
             continue
@@ -325,7 +326,8 @@ def _sprint_summary(stories: list[dict]) -> dict:
             seen_prs.add(url)
             author = pr.get("author_login") or s.get("assigned_to") or "Unknown"
             if author not in pr_by_individual:
-                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": []}
+                ado_name = _login_to_ado.get(author) or s.get("assigned_to") or ""
+                pr_by_individual[author] = {"prs_raised": 0, "merged_to_master": 0, "not_merged": 0, "pct_deployed": 0.0, "ai_labeled": 0, "ai_labeled_prs": [], "assigned_to": ado_name}
             rec = pr_by_individual[author]
             rec["prs_raised"] += 1
             if pr.get("merged_to_master"):
