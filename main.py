@@ -3,7 +3,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -35,9 +35,55 @@ except Exception as _e:
     print(f"  [Config] Warning: could not load github_login_map.json: {_e}")
     _login_to_ado = {}
 
-# Cache GitHub PR fetches by (start, finish) window so multiple teams sharing
-# the same sprint dates don't repeat identical REST calls.
-_sprint_pr_cache: dict[tuple[str, str], list[dict]] = {}
+# GitHub PR disk cache — keyed by sprint date window, TTL-aware.
+# Closed sprints (finish < today) use a 24-hour TTL; open sprints use 30 minutes.
+_PR_CACHE_PATH = os.path.join(os.path.dirname(__file__), ".pr_cache.json")
+_pr_disk_cache: dict[str, dict] = {}  # "start|finish" → {"ts": ISO, "prs": [...]}
+
+
+def _load_pr_cache() -> None:
+    global _pr_disk_cache
+    try:
+        with open(_PR_CACHE_PATH, encoding="utf-8") as f:
+            _pr_disk_cache = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        _pr_disk_cache = {}
+
+
+def _save_pr_cache() -> None:
+    try:
+        with open(_PR_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_pr_disk_cache, f)
+    except Exception as e:
+        print(f"  [Cache] Failed to save PR cache: {e}")
+
+
+def _pr_cache_get(start: str, finish: str) -> list[dict] | None:
+    """Return cached PR list if still fresh, else None."""
+    key = f"{start[:10]}|{finish[:10]}"
+    entry = _pr_disk_cache.get(key)
+    if not entry:
+        return None
+    try:
+        cached_at = datetime.fromisoformat(entry["ts"])
+    except (KeyError, ValueError):
+        return None
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    # Closed sprint: 24-hour TTL. Current/future sprint: 30-minute TTL.
+    ttl = timedelta(hours=24) if finish[:10] < today else timedelta(minutes=30)
+    if now - cached_at > ttl:
+        return None
+    return entry["prs"]
+
+
+def _pr_cache_set(start: str, finish: str, prs: list[dict]) -> None:
+    key = f"{start[:10]}|{finish[:10]}"
+    _pr_disk_cache[key] = {"ts": datetime.now(timezone.utc).isoformat(), "prs": prs}
+    _save_pr_cache()
+
+
+_load_pr_cache()
 
 _BLOCKER_RE = re.compile(
     r".{0,60}(?:blocked|blocker|blocking|impediment|waiting on|on hold|pending|dependency|risk|stuck).{0,60}",
@@ -143,7 +189,8 @@ def _extract_roadblocks(texts: list[str], wi_id: int, title: str, ado_url: str) 
 
 def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
                  description: str = "", comments: list[str] | None = None,
-                 feature_map: dict | None = None) -> dict:
+                 feature_map: dict | None = None,
+                 updates: list[dict] | None = None) -> dict:
     fields = work_item.get("fields", {})
     relations = ado.parse_relations(work_item)
 
@@ -168,8 +215,10 @@ def _audit_story(work_item: dict, ado: AzureDevOpsClient, gh: GitHubClient,
         pr_html_url = gh.get_pr_html_url(relations["pr_urls"][0])
 
     wi_id = work_item["id"]
-    effort = _parse_effort(ado.get_work_item_updates(wi_id)) if _track_effort else \
-             {"dev_days": None, "dev_wip": False, "qa_days": None, "qa_wip": False}
+    if _track_effort:
+        effort = _parse_effort(updates if updates is not None else ado.get_work_item_updates(wi_id))
+    else:
+        effort = {"dev_days": None, "dev_wip": False, "qa_days": None, "qa_wip": False}
 
     # Feature attribution: parent link → description pattern → "Unassigned"
     feature_name = "Unassigned"
@@ -451,22 +500,29 @@ def _process_team(
         return None
     print(f"  Sprints: {[s['name'] for s in sprints]}")
 
-    # ── Pass 1: collect all work items across sprints ─────────────────────
+    # ── Pass 1: collect all work items across sprints (parallel) ──────────
     sprint_raw: list[tuple[dict, list[dict]]] = []  # (sprint_meta, work_items)
     all_wi: dict[int, dict] = {}  # id → work_item (deduped)
 
-    for sprint in sprints:
-        print(f"  -> {sprint['name']} ...", end=" ", flush=True)
+    def _fetch_sprint(sprint: dict) -> tuple[dict, list[dict]]:
         ids = ado.get_sprint_work_item_ids(team["id"], sprint["id"])
         work_items = ado.get_work_items(ids)
         filtered = [
             wi for wi in work_items
             if wi.get("fields", {}).get("System.WorkItemType") in ("User Story", "Bug", "Task")
         ]
-        print(f"{len(filtered)} work items")
-        sprint_raw.append((sprint, filtered))
-        for wi in filtered:
-            all_wi[wi["id"]] = wi
+        print(f"  -> {sprint['name']}: {len(filtered)} work items")
+        return sprint, filtered
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sprints) or 1) as ex:
+        for sprint, filtered in ex.map(_fetch_sprint, sprints):
+            sprint_raw.append((sprint, filtered))
+            for wi in filtered:
+                all_wi[wi["id"]] = wi
+
+    # Restore chronological order (map returns in submission order, but be explicit)
+    sprint_order = {s["id"]: i for i, s in enumerate(sprints)}
+    sprint_raw.sort(key=lambda t: sprint_order.get(t[0]["id"], 0))
 
     # ── Pass 2: batch-fetch descriptions + resolve parent Feature titles ──
     all_ids = list(all_wi.keys())
@@ -510,36 +566,60 @@ def _process_team(
 
         print(f"{len(feature_map)} features found")
 
-    comments_map: dict[int, list[str]] = {}
-    if _fetch_comments:
-        print("  Fetching comments...", end=" ", flush=True)
-        for wi_id in all_ids:
-            comments_map[wi_id] = ado.get_work_item_comments(wi_id)
+    # Parallel prefetch of work item updates (needed for effort tracking) and comments
+    updates_map: dict[int, list[dict]] = {}
+    if _track_effort and all_ids:
+        print(f"  Fetching effort history for {len(all_ids)} items (parallel)...", end=" ", flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+            future_to_id = {ex.submit(ado.get_work_item_updates, wi_id): wi_id for wi_id in all_ids}
+            for future in concurrent.futures.as_completed(future_to_id):
+                wi_id = future_to_id[future]
+                try:
+                    updates_map[wi_id] = future.result()
+                except Exception:
+                    updates_map[wi_id] = []
         print("done")
 
-    # ── Pass 3: audit stories with enriched data ──────────────────────────
+    comments_map: dict[int, list[str]] = {}
+    if _fetch_comments:
+        print(f"  Fetching comments for {len(all_ids)} items (parallel)...", end=" ", flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=12) as ex:
+            future_to_id = {ex.submit(ado.get_work_item_comments, wi_id): wi_id for wi_id in all_ids}
+            for future in concurrent.futures.as_completed(future_to_id):
+                wi_id = future_to_id[future]
+                try:
+                    comments_map[wi_id] = future.result()
+                except Exception:
+                    comments_map[wi_id] = []
+        print("done")
+
+    # ── Pass 3: audit stories in parallel per sprint ──────────────────────
+    def _do_audit(wi: dict) -> dict:
+        return _audit_story(
+            wi, ado, gh,
+            description=re.sub(r"<[^>]+>", " ",
+                               (desc_map.get(wi["id"]) or {}).get("System.Description") or ""),
+            comments=comments_map.get(wi["id"], []),
+            feature_map=feature_map,
+            updates=updates_map.get(wi["id"]),
+        )
+
     sprint_out = []
     for sprint, filtered in sprint_raw:
-        stories = [
-            _audit_story(
-                wi, ado, gh,
-                description=re.sub(r"<[^>]+>", " ",
-                                   (desc_map.get(wi["id"]) or {}).get("System.Description") or ""),
-                comments=comments_map.get(wi["id"], []),
-                feature_map=feature_map,
-            )
-            for wi in filtered
-        ]
+        if filtered:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+                stories = list(ex.map(_do_audit, filtered))
+        else:
+            stories = []
         sprint_start  = (sprint.get("attributes") or {}).get("startDate", "")
         sprint_finish = (sprint.get("attributes") or {}).get("finishDate", "")
         summary = _sprint_summary(stories)
 
         # Override pr_by_individual with a direct GitHub repo query if configured
         if _github_repos and sprint_start and sprint_finish:
-            cache_key = (sprint_start[:10], sprint_finish[:10])
-            if cache_key in _sprint_pr_cache:
-                all_gh_prs = _sprint_pr_cache[cache_key]
-                print(f"  [GitHub] Sprint {cache_key[0]}/{cache_key[1]}: cache hit ({len(all_gh_prs)} PR(s))")
+            all_gh_prs = _pr_cache_get(sprint_start, sprint_finish)
+            if all_gh_prs is not None:
+                print(f"  [GitHub] Sprint {sprint_start[:10]}/{sprint_finish[:10]}: disk cache hit ({len(all_gh_prs)} PR(s))")
             else:
                 all_gh_prs = []
                 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
@@ -557,7 +637,7 @@ def _process_team(
                         ai_count = sum(1 for p in repo_prs if p.get("ai_labeled"))
                         print(f"  [GitHub] {repo}: {len(repo_prs)} PR(s), {ai_count} AI-labeled")
                         all_gh_prs.extend(repo_prs)
-                _sprint_pr_cache[cache_key] = all_gh_prs
+                _pr_cache_set(sprint_start, sprint_finish, all_gh_prs)
             if all_gh_prs:
                 summary["pr_by_individual"] = _pr_by_individual_from_list(all_gh_prs, _login_to_ado)
 
@@ -615,8 +695,10 @@ def _process_team_json(team: dict, ado: "AzureDevOpsClient", gh: "GitHubClient")
     return _process_team(team, ado, gh, sprint_count, start_sprint, include_backlog)
 
 
-def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient) -> dict:
-    sprint_count = int(os.environ.get("SPRINT_COUNT", "3"))
+def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient,
+                      sprint_count_override: int | None = None) -> dict:
+    sprint_count = sprint_count_override if sprint_count_override is not None \
+                   else int(os.environ.get("SPRINT_COUNT", "3"))
     start_sprint = os.environ.get("START_SPRINT", "").strip()
     include_backlog = os.environ.get("INCLUDE_BACKLOG", "false").lower() == "true"
     project = ado.project
@@ -628,12 +710,11 @@ def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient) -> dict:
         sys.exit(1)
     print(f"  Found {len(teams_raw)} team(s)")
 
-    teams_out = [
-        result
-        for team in teams_raw
-        for result in [_process_team(team, ado, gh, sprint_count, start_sprint, include_backlog)]
-        if result is not None
-    ]
+    def _process_one(team):
+        return _process_team(team, ado, gh, sprint_count, start_sprint, include_backlog)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(teams_raw), 8)) as ex:
+        teams_out = [r for r in ex.map(_process_one, teams_raw) if r is not None]
 
     return {
         "project": project,
@@ -645,121 +726,11 @@ def build_report_data(ado: AzureDevOpsClient, gh: GitHubClient) -> dict:
     }
 
 
-def _run_serve_mode(ado: "AzureDevOpsClient", gh: "GitHubClient", port: int = 8080) -> None:
-    import http.server
-    import json as _json
-    import threading
-    import webbrowser
-
-    output_dir = os.environ.get("OUTPUT_DIR", ".")
-
-    # Shared state protected by a lock
-    _lock = threading.Lock()
-    _state: dict = {
-        "html": b"",
-        "refreshing": False,  # True while background fetch is running
-        "error": None,        # last error message, or None
-    }
-
-    def _regenerate() -> None:
-        data = build_report_data(ado, gh)
-        _, html = generate_report(data, output_dir, serve_mode=True)
-        with _lock:
-            _state["html"] = html.encode("utf-8")
-
-    def _refresh_worker() -> None:
-        try:
-            _regenerate()
-            with _lock:
-                _state["refreshing"] = False
-                _state["error"] = None
-        except Exception as exc:
-            with _lock:
-                _state["refreshing"] = False
-                _state["error"] = str(exc)
-
-    def _json_response(handler: "http.server.BaseHTTPRequestHandler", status: int, payload: dict) -> None:
-        resp = _json.dumps(payload).encode()
-        handler.send_response(status)
-        handler.send_header("Content-Type", "application/json")
-        handler.send_header("Content-Length", str(len(resp)))
-        handler.end_headers()
-        handler.wfile.write(resp)
-
-    class _Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            if self.path in ("/", "/index.html"):
-                with _lock:
-                    body = _state["html"]
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            elif self.path == "/status":
-                with _lock:
-                    payload = {
-                        "refreshing": _state["refreshing"],
-                        "error": _state["error"],
-                    }
-                _json_response(self, 200, payload)
-            elif self.path == "/teams":
-                _json_response(self, 200, ado.get_all_teams())
-            elif self.path.startswith("/team-panel/"):
-                from report_generator import _render_team_panel_fragment
-                team_id = self.path[len("/team-panel/"):]
-                all_teams = ado.get_all_teams()
-                matched = next((t for t in all_teams if t["id"] == team_id), None)
-                if not matched:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                result = _process_team_json(matched, ado, gh)
-                if result is None:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = _render_team_panel_fragment(result, serve_mode=True).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            else:
-                self.send_response(404)
-                self.end_headers()
-
-        def do_POST(self) -> None:
-            if self.path == "/refresh":
-                with _lock:
-                    already = _state["refreshing"]
-                    if not already:
-                        _state["refreshing"] = True
-                        _state["error"] = None
-                if already:
-                    _json_response(self, 200, {"started": False, "reason": "already running"})
-                else:
-                    threading.Thread(target=_refresh_worker, daemon=True).start()
-                    _json_response(self, 200, {"started": True})
-            else:
-                self.send_response(404)
-                self.end_headers()
-
-        def log_message(self, *args) -> None:  # noqa: ANN002
-            pass  # suppress default per-request stdout noise
-
-    print("Fetching initial data...")
-    _regenerate()
-
-    server = http.server.HTTPServer(("localhost", port), _Handler)
+def _run_serve_mode(port: int = 8080) -> None:
+    import uvicorn
     url = f"http://localhost:{port}/"
-    print(f"\nDashboard ready at {url}  (Ctrl+C to stop)\n")
-    # Open browser in a background thread so the server starts first
-    threading.Timer(0.5, webbrowser.open, args=(url,)).start()
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nServer stopped.")
+    print(f"\nStarting FastAPI server at {url}  (Ctrl+C to stop)\n")
+    uvicorn.run("server:app", host="localhost", port=port, reload=False)
 
 
 def main() -> None:
@@ -773,16 +744,16 @@ def main() -> None:
         except (IndexError, ValueError):
             print("--port requires an integer value; defaulting to 8080.")
 
-    ado = AzureDevOpsClient()
-    gh = GitHubClient(ado_session=ado.session, ado_base=ado.base)
-
     print("=" * 60)
     print("ADO Manager Dashboard Generator")
     print("=" * 60)
 
     if serve_mode:
-        _run_serve_mode(ado, gh, port=port)
+        _run_serve_mode(port=port)
         return
+
+    ado = AzureDevOpsClient()
+    gh = GitHubClient(ado_session=ado.session, ado_base=ado.base)
 
     data = build_report_data(ado, gh)
     output_dir = os.environ.get("OUTPUT_DIR", ".")

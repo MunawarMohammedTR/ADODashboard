@@ -10,23 +10,25 @@
     <!-- ══════════ SPRINT VIEW ══════════ -->
     <div class="view-panel active" id="sprint-view-{{ team.id }}">
 
-    <!-- Assigned To filter -->
-    <div class="af-bar">
-      <span class="af-label">Assigned To:</span>
-      <select class="assignee-select" id="af-{{ team.id }}" onchange="onAssigneeChange('{{ team.id }}', this.value)">
-        <option value="">All</option>
-      </select>
+    <!-- Unified filter toolbar -->
+    <div class="filter-toolbar">
+      <div class="filter-group">
+        <span class="filter-label">Assigned To</span>
+        <select class="filter-select" id="af-{{ team.id }}" onchange="onAssigneeChange('{{ team.id }}', this.value)">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="filter-divider"></div>
+      <div class="filter-group">
+        <span class="filter-label">Tag</span>
+        <select class="filter-select" id="tag-select-{{ team.id }}" onchange="applyTagFilter('{{ team.id }}', this.value)">
+          <option value="">All Tags</option>
+        </select>
+      </div>
+      <span class="filter-note-inline" id="fn-{{ team.id }}" style="display:none"></span>
     </div>
 
-    <!-- Tag filter -->
-    <div class="tag-bar">
-      <span class="tag-label">Tags:</span>
-      <select class="tag-select" id="tag-select-{{ team.id }}" onchange="applyTagFilter('{{ team.id }}', this.value)">
-        <option value="">All Tags</option>
-      </select>
-    </div>
-
-    <!-- Person cross-sprint summary (shown when a person pill is active) -->
+    <!-- Person cross-sprint summary (shown when a person is selected) -->
     <div class="person-summary" id="ps-{{ team.id }}" style="display:none">
       <div class="person-summary-header">
         <h3 id="ps-title-{{ team.id }}"></h3>
@@ -51,22 +53,20 @@
           <canvas class="person-canvas" id="ps-chart-{{ team.id }}"></canvas>
         </div>
       </div>
-      <!-- All completed items for this person across all sprints -->
       <div class="ps-completed-section">
         <h4 id="ps-completed-title-{{ team.id }}">All Completed Items</h4>
         <div class="ps-completed-wrap" id="ps-completed-{{ team.id }}"></div>
       </div>
     </div>
 
-    <!-- Sprint selector -->
-    <div class="sprint-bar">
-      <label>Sprint:</label>
-      <select class="sprint-select" onchange="switchSprint('{{ team.id }}', this.value)">
-        {% for sprint in team.sprints %}
-        {% set hl = sprint.data.health_label %}
-        <option value="{{ sprint.id }}">{{ sprint.name }} {% if hl == 'green' %}✔{% elif hl == 'amber' %}⚠{% else %}✘{% endif %} {{ sprint.data.health_score }}</option>
-        {% endfor %}
-      </select>
+    <!-- Sprint pills -->
+    <div class="sprint-pills" id="pills-{{ team.id }}">
+      {% for sprint in team.sprints %}
+      {% set hl = sprint.data.health_label %}
+      <div class="sprint-pill {{ hl }}{% if loop.first %} active{% endif %}" id="pill-{{ team.id }}-{{ sprint.id }}" onclick="switchSprint('{{ team.id }}','{{ sprint.id }}')" data-sprint-id="{{ sprint.id }}">
+        <span class="pill-dot"></span>{{ sprint.name }}
+      </div>
+      {% endfor %}
     </div>
 
     {% for sprint in team.sprints %}
@@ -77,18 +77,15 @@
       {% set hl = sdata.health_label %}
       <div class="sprint-health-bar {{ hl }}">
         <span class="health-dot health-dot-{{ hl }}"></span>
-        Sprint Health Score: <strong>{{ sdata.health_score }} / 100</strong>
-        &nbsp;—&nbsp;
-        {% if hl == 'green' %}Healthy sprint
-        {% elif hl == 'amber' %}Needs attention
-        {% else %}At risk
-        {% endif %}
-        <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:.8">
-          Completion {{ sdata.completed }}/{{ sdata.total }} &nbsp;|&nbsp; Audit {{ sdata.audit_pass_rate }}%
+        Sprint Health: <strong>{{ sdata.health_score }} / 100</strong>
+        &nbsp;&mdash;&nbsp;
+        {% if hl == 'green' %}Healthy{% elif hl == 'amber' %}Needs attention{% else %}At risk{% endif %}
+        <span style="margin-left:auto;font-size:11px;font-weight:500;opacity:.85">
+          Completion {{ sdata.completed }}/{{ sdata.total }} &nbsp;&middot;&nbsp; Audit {{ sdata.audit_pass_rate }}%
         </span>
       </div>
 
-      <!-- Summary cards (static; updated by JS when filtered) -->
+      <!-- Summary cards -->
       <div class="cards" id="cards-{{ team.id }}-{{ sprint.id }}">
         <div class="card">
           <div class="value" id="c-total-{{ team.id }}-{{ sprint.id }}">{{ sdata.total }}</div>
@@ -124,9 +121,6 @@
         </div>
       </div>
 
-      <!-- Filter note -->
-      <div class="filter-note" id="fn-{{ team.id }}-{{ sprint.id }}" style="display:none;margin-bottom:12px;padding:6px 14px;background:#e8eaf6;border-radius:6px;font-size:12px;color:#1a237e"></div>
-
       <!-- Audit table -->
       {% if sdata.stories %}
       <div class="table-wrapper">
@@ -139,11 +133,11 @@
               <th>Assigned To</th>
               <th style="text-align:right">Points</th>
               <th title="Acceptance Criteria filled">AC</th>
-              <th title="At least one GitHub PR linked">PR</th>
-              <th title="At least one commit linked">Commits</th>
-              <th title="GitHub PR has an approved review">Reviewed</th>
-              <th title="Calendar days in 'In Development' state" style="text-align:right">Dev Days</th>
-              <th title="Calendar days in 'QA' state" style="text-align:right">QA Days</th>
+              <th title="GitHub PR linked">PR</th>
+              <th title="Commit linked">Commits</th>
+              <th title="PR approved review">Reviewed</th>
+              <th title="Days in development" style="text-align:right">Dev Days</th>
+              <th title="Days in QA" style="text-align:right">QA Days</th>
             </tr>
           </thead>
           <tbody>
@@ -152,24 +146,24 @@
               <td class="id-col"><a href="{{ s.ado_url }}" target="_blank">#{{ s.id }}</a></td>
               <td class="title-col" title="{{ s.title }}">
                 {% if s.work_item_type == 'Bug' %}
-                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="Bug"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>
+                <svg width="13" height="13" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="Bug"><circle cx="7" cy="7" r="7" fill="#cc3311"/><circle cx="7" cy="7" r="2.8" fill="none" stroke="#fff" stroke-width="1.4"/><line x1="7" y1="1.5" x2="7" y2="12.5" stroke="#fff" stroke-width="1.2"/><line x1="1.5" y1="7" x2="12.5" y2="7" stroke="#fff" stroke-width="1.2"/></svg>
                 {% else %}
-                <svg width="14" height="14" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="User Story"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>
+                <svg width="13" height="13" viewBox="0 0 14 14" style="vertical-align:middle;margin-right:4px;flex-shrink:0" title="User Story"><rect width="14" height="14" rx="2" fill="#773388"/><path d="M3 2h8v10L7 9.2 3 12z" fill="#fff" opacity=".9"/></svg>
                 {% endif %}{{ s.title }}</td>
               <td><span class="state-badge state-{{ s.state | replace(' ', '\\ ') }}">{{ s.state }}</span></td>
               <td class="assigned-col" title="{{ s.assigned_to }}">{{ s.assigned_to }}</td>
               <td class="points-col">{{ s.story_points if s.story_points else '—' }}</td>
               <td class="audit">{% if s.has_ac %}<span class="pass" title="AC present">✔</span>{% else %}<span class="fail" title="Missing AC">✘</span>{% endif %}</td>
               <td class="audit">{% if s.has_pr %}<span class="pass" title="PR linked">✔</span>{% else %}<span class="fail" title="No PR linked">✘</span>{% endif %}</td>
-              <td class="audit">{% if s.has_commit %}<span class="pass" title="Commit linked">✔</span>{% else %}<span class="fail" title="No commit">✘</span>{% endif %}</td>
-              <td class="audit">{% if s.pr_reviewed %}<span class="pass" title="Approved review">✔</span>{% elif not s.has_pr %}<span style="color:#bbb" title="No PR">—</span>{% else %}<span class="fail" title="No approved review">✘</span>{% endif %}</td>
-              <td class="effort-col">{% if s.dev_days is not none %}{{ s.dev_days }}{% if s.dev_wip %}<span class="wip-star" title="Still in development">*</span>{% endif %}{% else %}—{% endif %}</td>
-              <td class="effort-col">{% if s.qa_days is not none %}{{ s.qa_days }}{% if s.qa_wip %}<span class="wip-star" title="Still in QA">*</span>{% endif %}{% else %}—{% endif %}</td>
+              <td class="audit">{% if s.has_commit %}<span class="pass">✔</span>{% else %}<span class="fail">✘</span>{% endif %}</td>
+              <td class="audit">{% if s.pr_reviewed %}<span class="pass">✔</span>{% elif not s.has_pr %}<span style="color:#bbb">—</span>{% else %}<span class="fail">✘</span>{% endif %}</td>
+              <td class="effort-col">{% if s.dev_days is not none %}{{ s.dev_days }}{% if s.dev_wip %}<span class="wip-star">*</span>{% endif %}{% else %}—{% endif %}</td>
+              <td class="effort-col">{% if s.qa_days is not none %}{{ s.qa_days }}{% if s.qa_wip %}<span class="wip-star">*</span>{% endif %}{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
-        <div class="no-visible-rows" id="nvr-{{ team.id }}-{{ sprint.id }}">No stories assigned to this person in this sprint.</div>
+        <div class="no-visible-rows" id="nvr-{{ team.id }}-{{ sprint.id }}">No stories match the current filter.</div>
       </div>
       {% else %}
       <div class="no-data">No work items found in this sprint.</div>
@@ -195,12 +189,10 @@
     <!-- ══════════ FEATURE VIEW ══════════ -->
     <div class="view-panel" id="feature-view-{{ team.id }}">
 
-      <!-- Feature cards -->
       <div class="feature-cards-grid" id="fcards-{{ team.id }}">
         <!-- populated by JS -->
       </div>
 
-      <!-- Feature detail panel (shown on card click) -->
       <div class="feature-detail" id="fdetail-{{ team.id }}">
         <div class="fd-header">
           <h3 id="fd-title-{{ team.id }}"></h3>
@@ -213,7 +205,7 @@
           <div class="fd-roadblocks" id="fd-roadblocks-{{ team.id }}"></div>
         </div>
         <div class="fd-section-header">Work Items</div>
-        <div class="fd-table-wrap" style="padding:0 20px 20px">
+        <div class="fd-table-wrap" style="padding:0 18px 18px">
           <table class="fd-table">
             <thead>
               <tr>
@@ -231,9 +223,8 @@
     <!-- ══════════ PR VIEW ══════════ -->
     <div class="view-panel" id="pr-view-{{ team.id }}">
 
-      <!-- Sprint selector for PR view -->
       <div class="pr-sprint-bar">
-        <label>Sprint:</label>
+        <label>Sprint</label>
         <select class="pr-sprint-sel" id="pr-sprint-sel-{{ team.id }}" onchange="buildPRView('{{ team.id }}', this.value)">
           {% for sprint in team.sprints %}
           {% if not sprint.is_backlog %}
@@ -243,7 +234,6 @@
         </select>
       </div>
 
-      <!-- PR table populated by JS -->
       <div class="pr-table-wrap" id="pr-table-wrap-{{ team.id }}">
         <div class="pr-no-data">Select a sprint to view PR statistics.</div>
       </div>
